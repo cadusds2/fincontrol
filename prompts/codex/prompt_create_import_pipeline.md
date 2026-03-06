@@ -32,6 +32,8 @@ Entregar o pipeline de importação manual com rastreabilidade e integração ao
 - Não implementar autodetecção de tipo de arquivo.
 - Não implementar autodetecção de conta/cartão.
 - Garantir logs de erro úteis sem vazar dados sensíveis.
+- Preservar estratégia cash basis para compras parceladas no cartão.
+- Garantir que `Pagamento de Fatura` e `Transferência Interna` possam ser classificados como categorias técnicas não reportáveis.
 
 ## Entregável esperado
 - Fluxo de importação funcionando ponta a ponta.

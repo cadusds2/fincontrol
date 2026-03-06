@@ -13,11 +13,12 @@ Antes de criar código, seguir esta sequência:
 1. `README.md` — visão geral e escopo do MVP.
 2. `docs/product_overview.md` — objetivos funcionais e não funcionais.
 3. `docs/decisions.md` — decisões já fechadas (não reabrir sem solicitação explícita).
-4. `docs/domain_model.md` — entidades e relações do domínio.
-5. `docs/import_pipeline.md` — fluxo de importação manual.
-6. `docs/classification_strategy.md` — estratégia de classificação sem LLM.
-7. `docs/categories.md` — categorias de consumo e categorias técnicas.
-8. `docs/implementation_plan.md` — fase atual e backlog estruturado.
+4. `docs/architecture.md` — visão de camadas, componentes e fluxo ponta a ponta.
+5. `docs/domain_model.md` — entidades e relações do domínio.
+6. `docs/import_pipeline.md` — fluxo de importação manual.
+7. `docs/classification_strategy.md` — estratégia de classificação sem LLM.
+8. `docs/categories.md` — categorias de consumo e categorias técnicas.
+9. `docs/implementation_plan.md` — fase atual e backlog estruturado.
 
 ## Regras operacionais
 

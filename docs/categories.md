@@ -26,13 +26,17 @@ Definir taxonomia inicial de categorias para classificação e relatórios do MV
 
 ## Categorias técnicas (não entram nos relatórios principais)
 
+### Técnicas obrigatórias no MVP
 - Pagamento de Fatura
 - Transferência Interna
+
+### Técnicas adicionais permitidas
 - Ajuste/Estorno Técnico
 
 ## Diretrizes de uso
 
 - Categorias técnicas devem ter `is_reportable = false`.
+- As categorias técnicas obrigatórias do MVP devem permanecer alinhadas às decisões D-009, D-010 e D-011.
 - Relatórios de consumo devem filtrar apenas categorias de consumo.
 - Caso uma transação seja técnica, ela não deve compor totais de gasto por estilo de vida.
 
