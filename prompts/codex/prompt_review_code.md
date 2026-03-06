@@ -31,6 +31,10 @@ Avaliar aderência ao domínio, consistência arquitetural e riscos de manutenç
 - Sem uso de LLM no MVP?
 - `MerchantMap` é atualizado de forma segura após revisão manual?
 
+### 3.1) Regras críticas de domínio
+- Tratamento de parcelas segue cash basis no MVP?
+- `Pagamento de Fatura` e `Transferência Interna` continuam como categorias técnicas não reportáveis?
+
 ### 4) Qualidade técnica
 - Código legível, testável e coerente com Django?
 - Cobertura mínima para fluxos críticos?

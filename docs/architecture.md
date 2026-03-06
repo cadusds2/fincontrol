@@ -53,5 +53,5 @@ O MVP adota arquitetura monolítica em Django, com separação por camadas lógi
 ## Pontos de extensão planejados (pós-MVP)
 
 - Estratégia de classificação híbrida com LLM.
-- Novos conectores de importação (outros bancos/formados).
+- Novos conectores de importação (outros bancos/formatos).
 - Dashboard analítico avançado.

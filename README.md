@@ -71,6 +71,17 @@ A documentação central do projeto está em `docs/`:
 - [Plano de implementação](docs/implementation_plan.md)
 - [Glossário](docs/glossary.md)
 
+## Como começar (porta de entrada)
+
+Para se situar rápido no projeto e evitar retrabalho, siga esta trilha curta:
+
+1. Leia este `README.md` para entender escopo e limites do MVP.
+2. Leia o [`AGENTS.md`](AGENTS.md) para regras operacionais de implementação.
+3. Avance para `docs/product_overview.md` e `docs/decisions.md` para consolidar contexto de produto e decisões já fechadas.
+4. Só então entre nos documentos de execução (`domain_model`, `import_pipeline`, `classification_strategy` e `implementation_plan`).
+
+Essa sequência reduz risco de contradições e mantém aderência ao domínio definido.
+
 ## Uso por agentes (Codex e similares)
 
 1. Leia [`AGENTS.md`](AGENTS.md) antes de iniciar qualquer tarefa.
