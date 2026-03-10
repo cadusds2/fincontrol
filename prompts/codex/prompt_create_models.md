@@ -2,16 +2,19 @@
 
 Você está implementando os modelos do Finance Agent no Django ORM.
 
-## Contexto obrigatório
-Leia antes:
-1. `AGENTS.md`
-2. `docs/domain_model.md`
-3. `docs/categories.md`
-4. `docs/decisions.md`
-5. `docs/implementation_plan.md`
-
 ## Objetivo
-Implementar os modelos centrais do MVP:
+Implementar os modelos centrais do MVP com aderência estrita ao domínio documentado.
+
+## Protocolo obrigatório de leitura
+Leia antes de implementar:
+1. [`AGENTS.md`](../../AGENTS.md)
+2. [`docs/domain_model.md`](../../docs/domain_model.md)
+3. [`docs/categories.md`](../../docs/categories.md)
+4. [`docs/decisions.md`](../../docs/decisions.md)
+5. [`docs/implementation_plan.md`](../../docs/implementation_plan.md)
+
+## Escopo desta execução
+Implementar:
 - `Account`
 - `ImportBatch`
 - `Transaction`
@@ -29,13 +32,15 @@ Implementar os modelos centrais do MVP:
 2. Suportar categorias técnicas (`Pagamento de Fatura`, `Transferência Interna`) e sinalização de reportabilidade.
 3. Definir relacionamentos e constraints coerentes com o domínio.
 4. Gerar migrações iniciais.
-5. Incluir dados seed mínimos para categorias essenciais.
+5. Incluir seed mínimo para categorias essenciais.
 
-## Restrições
+## Restrições invioláveis
 - Sem LLM.
-- Sem criação de modelos não justificados pela documentação.
-- Manter nomes consistentes com a documentação.
+- Sem criação de modelos não justificados na documentação.
+- Manter nomes consistentes com os documentos oficiais.
+- Não quebrar decisões registradas em `docs/decisions.md`.
 
 ## Entregável esperado
 - Modelos e migrações funcionais.
-- Breve explicação de decisões técnicas que não estavam explícitas.
+- Explicação breve de decisões técnicas não explícitas na documentação.
+- Resumo final indicando quais documentos foram usados para cada decisão estrutural.

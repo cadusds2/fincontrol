@@ -2,18 +2,19 @@
 
 Você está implementando o fluxo de importação de CSV do Finance Agent.
 
-## Contexto obrigatório
-Leia antes:
-1. `AGENTS.md`
-2. `docs/import_pipeline.md`
-3. `docs/domain_model.md`
-4. `docs/decisions.md`
-5. `docs/classification_strategy.md`
-
 ## Objetivo
-Entregar o pipeline de importação manual com rastreabilidade e integração ao classificador.
+Entregar pipeline de importação manual com rastreabilidade por lote e integração ao classificador.
 
-## Escopo
+## Protocolo obrigatório de leitura
+Leia antes de implementar:
+1. [`AGENTS.md`](../../AGENTS.md)
+2. [`docs/import_pipeline.md`](../../docs/import_pipeline.md)
+3. [`docs/domain_model.md`](../../docs/domain_model.md)
+4. [`docs/decisions.md`](../../docs/decisions.md)
+5. [`docs/classification_strategy.md`](../../docs/classification_strategy.md)
+6. [`docs/categories.md`](../../docs/categories.md)
+
+## Escopo desta execução
 1. Tela/formulário de upload com:
    - seleção manual de tipo de arquivo;
    - seleção manual de conta/cartão;
@@ -25,17 +26,19 @@ Entregar o pipeline de importação manual com rastreabilidade e integração ao
    - Extrato conta Itaú
    - Fatura cartão Itaú
 4. Transformação para formato canônico de `Transaction`.
-5. Deduplicação básica por hash.
+5. Deduplicação básica por hash canônico.
 6. Disparo do pipeline de classificação ao final da importação.
 
-## Regras importantes
+## Regras críticas de domínio
 - Não implementar autodetecção de tipo de arquivo.
 - Não implementar autodetecção de conta/cartão.
-- Garantir logs de erro úteis sem vazar dados sensíveis.
 - Preservar estratégia cash basis para compras parceladas no cartão.
-- Garantir que `Pagamento de Fatura` e `Transferência Interna` possam ser classificados como categorias técnicas não reportáveis.
+- Garantir classificação técnica de `Pagamento de Fatura` e `Transferência Interna`.
+- Garantir que categorias técnicas não entrem no relatório principal.
+- Garantir logs úteis sem exposição de dados sensíveis.
 
 ## Entregável esperado
 - Fluxo de importação funcionando ponta a ponta.
 - Testes básicos de parser e persistência.
 - Documentação atualizada em caso de ajuste de contrato de dados.
+- Resumo final com riscos conhecidos e próximos passos sequenciais.
