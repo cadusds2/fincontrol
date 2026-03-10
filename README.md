@@ -55,7 +55,7 @@ Consulte o registro oficial em [`docs/decisions.md`](docs/decisions.md).
 
 > Antes de qualquer implementação, seguir esta sequência:
 
-1. [`AGENTS.md`](AGENTS.md)
+1. [`README.md`](README.md)
 2. [`docs/product_overview.md`](docs/product_overview.md)
 3. [`docs/decisions.md`](docs/decisions.md)
 4. [`docs/architecture.md`](docs/architecture.md)
@@ -64,6 +64,8 @@ Consulte o registro oficial em [`docs/decisions.md`](docs/decisions.md).
 7. [`docs/classification_strategy.md`](docs/classification_strategy.md)
 8. [`docs/categories.md`](docs/categories.md)
 9. [`docs/implementation_plan.md`](docs/implementation_plan.md)
+
+> Ordem canônica alinhada ao contrato em [`AGENTS.md`](AGENTS.md).
 
 ## Fluxo de trabalho esperado para implementações
 
