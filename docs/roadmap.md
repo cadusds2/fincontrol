@@ -3,47 +3,41 @@
 ## MVP (fase atual)
 
 ### Objetivo
-Disponibilizar fluxo completo de controle de gastos com importação CSV e classificação sem LLM.
+Disponibilizar fluxo completo de controle de gastos com importação manual, classificação sem LLM e revisão manual.
 
-### Entregas previstas
+### Entregas
 - Cadastro de contas/cartões.
-- Importação manual de CSV para Nubank/Itaú (conta e fatura).
-- Persistência por lote (`ImportBatch`) e transações (`Transaction`).
-- Classificação por pipeline determinístico.
-- Fila de revisão manual (`ReviewQueue`).
-- Aprendizado via `MerchantMap`.
-- Relatório simples por categoria (excluindo técnicas).
+- Importação manual CSV para 4 layouts iniciais.
+- Persistência por `ImportBatch` e `Transaction`.
+- Deduplicação por `raw_hash` canônico.
+- Pipeline oficial de classificação.
+- `ReviewQueue` para pendências.
+- Aprendizado incremental via `MerchantMap`.
+- Relatório por categoria com filtro `Category.is_reportable=true`.
 
 ## Pós-MVP (curto prazo)
 
 ### Objetivo
-Aumentar confiabilidade e produtividade do fluxo operacional.
+Aumentar produtividade e cobertura sem quebrar o modelo do MVP.
 
 ### Evoluções previstas
-- Melhorias de UX na revisão (atalhos, filtros e priorização).
-- Regras YAML mais ricas com versionamento explícito.
-- Estratégias mais robustas de deduplicação.
-- Dashboard mensal com comparação orçamento x realizado.
-- Ampliação de bancos/formatos de importação.
+- Melhorias de UX na revisão manual.
+- Versionamento mais robusto de regras YAML.
+- Ampliação de bancos e formatos suportados.
+- Relatórios comparativos mais ricos (orçamento x realizado).
+- Eventual detalhamento de taxonomia por subcategorias.
 
-## Evoluções futuras (médio/longo prazo)
+## Futuro (médio/longo prazo)
 
 ### Objetivo
-Escalar inteligência e automação sem perder governança.
+Escalar automação com governança.
 
 ### Possibilidades
-- Classificação híbrida com LLM (assistiva, não obrigatória).
-- Sugestões explicáveis de recategorização por contexto.
-- Conectores por API bancária.
-- Detecção automática de tipo de arquivo/conta com confirmação humana.
-- Projeções e alertas financeiros avançados.
+- Classificação assistida por LLM (opcional, fora do MVP).
+- Conectores via API bancária.
+- Detecção automática com confirmação humana.
 
-## Critérios para avançar de fase
+## Critérios de avanço
 
-- MVP → Pós-MVP:
-  - Importação e classificação estáveis em uso real.
-  - Baixa taxa de erro crítico de ingestão.
-  - Fluxo de revisão operacionalmente viável.
-- Pós-MVP → Futuro:
-  - Base histórica suficiente para modelos mais inteligentes.
-  - Governança de dados e métricas de qualidade maduras.
+- MVP → Pós-MVP: fluxos de importação, classificação e revisão estáveis em uso real.
+- Pós-MVP → Futuro: métricas maduras de qualidade e governança de dados.

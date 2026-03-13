@@ -1,46 +1,43 @@
-# Categorias do Projeto
+# Taxonomia de Categorias (MVP)
 
-## Objetivo
+## Decisão do MVP
 
-Definir taxonomia inicial de categorias para classificação e relatórios do MVP.
+Para o MVP, a taxonomia oficial é **simples e estável**. O objetivo é reduzir ambiguidade na classificação e acelerar a revisão manual.
 
-## Categorias de consumo (entram nos relatórios principais)
+A entidade `Category` usa dois campos canônicos:
+- `Category.kind`: define se a categoria é de `consumo` ou `tecnica`.
+- `Category.is_reportable`: define se entra nos relatórios principais de consumo.
 
-- Alimentação
-- Supermercado
-- Transporte
-- Combustível
+Regra de consistência no MVP:
+- `kind=consumo` => `is_reportable=true`
+- `kind=tecnica` => `is_reportable=false`
+
+Não usar nomenclaturas paralelas como `include_in_reports` ou `is_technical` na documentação do MVP.
+
+## Categorias de consumo (MVP)
+
 - Moradia
+- Alimentação
+- Transporte
 - Saúde
-- Educação
 - Lazer
 - Assinaturas
-- Compras Online
-- Serviços Financeiros
-- Impostos e Taxas
-- Viagem
-- Pets
-- Presentes e Doações
-- Trabalho
-- Outros Consumos
+- Educação
+- Compras
+- Contas/Serviços
+- Investimentos
+- Outros
 
-## Categorias técnicas (não entram nos relatórios principais)
+Todas as categorias de consumo são `kind=consumo` e `is_reportable=true`.
 
-### Técnicas obrigatórias no MVP
+## Categorias técnicas (MVP)
+
 - Pagamento de Fatura
 - Transferência Interna
+- Movimentação de Investimentos
 
-### Técnicas adicionais permitidas
-- Ajuste/Estorno Técnico
+Todas as categorias técnicas são `kind=tecnica` e `is_reportable=false`.
 
-## Diretrizes de uso
+## Evoluções pós-MVP (não obrigatórias agora)
 
-- Categorias técnicas devem ter `is_reportable = false`.
-- As categorias técnicas obrigatórias do MVP devem permanecer alinhadas às decisões D-009, D-010 e D-011.
-- Relatórios de consumo devem filtrar apenas categorias de consumo.
-- Caso uma transação seja técnica, ela não deve compor totais de gasto por estilo de vida.
-
-## Observações de evolução
-
-- A lista de consumo pode crescer conforme novos padrões aparecerem.
-- Alterações na taxonomia devem ser registradas em `docs/decisions.md`.
+Detalhamento adicional (subcategorias como "Supermercado", "Farmácia", "Streaming" etc.) fica como evolução futura e **não é pré-requisito de implementação do MVP**.

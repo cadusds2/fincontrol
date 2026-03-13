@@ -1,57 +1,54 @@
-# Arquitetura do Sistema
+# Arquitetura do Sistema (MVP)
 
 ## Visão geral
 
-O MVP adota arquitetura monolítica em Django, com separação por camadas lógicas:
+Arquitetura monolítica em Django com separação por apps e serviços internos:
 
-1. **Interface Web** (Django Templates, HTMX opcional)
-2. **Aplicação/Serviços** (fluxos de importação, classificação e revisão)
-3. **Domínio** (entidades e regras de negócio)
-4. **Persistência** (SQLite + ORM do Django)
+1. Interface Web (Django Templates, HTMX opcional)
+2. Camada de aplicação (fluxos de importação, classificação, revisão, relatório)
+3. Domínio (entidades e regras)
+4. Persistência (ORM Django + SQLite)
 
-## Componentes principais
+## Estrutura inicial sugerida de apps Django
 
-- **Módulo de Cadastro**
-  - Gerencia contas/cartões (`Account`) e configurações básicas.
-- **Módulo de Importação**
-  - Recebe CSV, valida metadados manuais, cria `ImportBatch`, normaliza e persiste `Transaction`.
-- **Módulo de Classificação**
-  - Aplica pipeline: normalização → MerchantMap → regras YAML → similaridade fuzzy → ReviewQueue.
-- **Módulo de Revisão**
-  - Exibe itens pendentes, recebe decisão manual, atualiza categoria e opcionalmente aprende via `MerchantMap`.
-- **Módulo de Relatórios**
-  - Consolida consumo por categoria e período, excluindo categorias técnicas.
+- `accounts`
+  - cadastro e manutenção de `Account`.
+- `imports`
+  - upload manual, `ImportBatch`, parsers e deduplicação por `raw_hash`.
+- `transactions`
+  - persistência e consulta de `Transaction`.
+- `classification`
+  - normalização, `MerchantMap`, regras YAML, similaridade e `ReviewQueue`.
+- `reports`
+  - relatórios de consumo e visão básica de `Budget`.
 
-## Fluxo principal ponta a ponta
+## Fluxos críticos do MVP
 
-1. Usuário seleciona tipo de arquivo e conta/cartão.
-2. Sistema cria `ImportBatch` com status inicial.
-3. CSV é lido e transformado em registros normalizados.
-4. Cada registro vira uma `Transaction` vinculada ao lote.
-5. Classificação automática é executada por etapas.
-6. Casos sem confiança mínima entram em `ReviewQueue`.
-7. Usuário revisa pendências e confirma categoria.
-8. Relatórios refletem dados revisados e excluem categorias técnicas.
+### 1) Importação manual
+1. Usuário seleciona `file_type`, `account_id` e CSV.
+2. Sistema cria `ImportBatch`.
+3. Parser dedicado transforma linhas para formato canônico.
+4. Deduplicação por `account_id + raw_hash` evita duplicatas.
+5. Transações válidas são persistidas e lote é finalizado.
 
-## Organização de dados (alto nível)
+### 2) Classificação
+1. Transações entram com `classification_source=unclassified`.
+2. Pipeline executa na ordem oficial: normalização → MerchantMap → regras YAML → similaridade.
+3. Sem confiança suficiente, criar item em `ReviewQueue`.
 
-- `Account` (conta/cartão)
-- `ImportBatch` (lote de importação)
-- `Transaction` (lançamento financeiro)
-- `MerchantMap` (aprendizado por merchant normalizado)
-- `ReviewQueue` (pendências de classificação)
-- `Budget` (orçamento por categoria/período)
-- `Category` (catálogo de categorias de consumo e técnicas)
+### 3) Revisão manual
+1. Usuário abre fila pendente.
+2. Define categoria final para cada item.
+3. Sistema atualiza `Transaction` (`classification_source=manual`) e retroalimenta `MerchantMap` quando aplicável.
 
-## Estratégias arquiteturais do MVP
+### 4) Geração de relatórios
+1. Relatório agrega transações por período/categoria.
+2. Somente categorias com `Category.is_reportable=true` entram no total principal.
+3. Categorias técnicas ficam fora do consumo principal.
 
-- **Determinismo na classificação:** evitar comportamento não reproduzível.
-- **Rastreabilidade completa:** cada transação deve apontar para seu lote de origem.
-- **Extensibilidade controlada:** preparar pontos para LLM no futuro, sem acoplamento agora.
-- **Simplicidade operacional:** priorizar deploy local e manutenção com baixo custo.
+## Princípios de implementação
 
-## Pontos de extensão planejados (pós-MVP)
-
-- Estratégia de classificação híbrida com LLM.
-- Novos conectores de importação (outros bancos/formatos).
-- Dashboard analítico avançado.
+- Sem LLM no MVP.
+- Sem autodetecção de tipo de arquivo ou conta/cartão.
+- Rastreabilidade ponta a ponta por `ImportBatch`.
+- Transparência da origem da classificação.

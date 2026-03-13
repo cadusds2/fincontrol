@@ -1,10 +1,13 @@
-# Estratégia de Classificação (MVP sem LLM)
+# Estratégia de Classificação (MVP)
 
-## Objetivo
+## Princípios
 
-Classificar transações de forma determinística e auditável, minimizando trabalho manual sem usar LLM.
+- Pipeline determinístico e auditável.
+- Sem LLM no MVP.
+- Toda transação termina classificada ou em `ReviewQueue`.
+- Origem da classificação registrada em `Transaction.classification_source`.
 
-## Pipeline oficial do MVP
+## Pipeline oficial (ordem obrigatória)
 
 1. **Normalização**
 2. **MerchantMap**
@@ -12,82 +15,47 @@ Classificar transações de forma determinística e auditável, minimizando trab
 4. **Similaridade fuzzy**
 5. **ReviewQueue**
 
-## 1) Normalização
+## Por que MerchantMap vem antes das regras YAML
 
-Transformar texto bruto para chave estável de comparação.
+`MerchantMap` é aplicado antes porque:
+- é mais específico para o histórico real do usuário;
+- tende a ter maior precisão para merchants recorrentes;
+- evita custo de avaliação de regras mais genéricas quando já existe mapeamento confiável.
 
-### Ações esperadas
-- caixa baixa;
-- remoção de acentos;
-- remoção de ruído comum (número de autorização, sufixos recorrentes, etc.);
-- colapso de espaços;
-- criação de `description_norm` e `merchant_norm`.
+## Etapas detalhadas
 
-## 2) MerchantMap
+### 1) Normalização
+- Gerar `description_norm` e `merchant_norm` a partir de `description_raw`.
+- Aplicar normalizações estáveis (casefold, remoção de ruído textual e espaços redundantes).
 
-Primeira fonte de classificação por histórico conhecido.
+### 2) MerchantMap
+- Buscar `merchant_norm` no mapa.
+- Em caso de match, atribuir categoria diretamente.
+- Registrar `classification_source=merchant_map`.
 
-### Regra
-- Se `merchant_norm` existir no `MerchantMap`, atribuir categoria mapeada.
-- Definir `classification_source = merchant_map`.
-- Definir confiança alta (ex.: `0.95`).
+### 3) Regras YAML
+- Avaliar regras declarativas por prioridade.
+- Primeira regra válida vence.
+- Registrar `classification_source=rule`.
 
-## 3) Regras YAML
+### 4) Similaridade fuzzy
+- Comparar `merchant_norm` com base conhecida.
+- Aplicar categoria apenas se score >= limiar definido em configuração.
+- Registrar `classification_source=similarity`.
 
-Conjunto de regras versionadas para padrões recorrentes.
+### 5) ReviewQueue
+- Se nenhuma etapa anterior produzir classificação confiável, criar item pendente.
+- Registrar `classification_source=unclassified` até decisão humana.
 
-### Exemplo de critérios de regra
-- presença de tokens em `description_norm`;
-- prefixos/sufixos;
-- combinação com direção (débito/crédito);
-- exceções explícitas.
+## Classificação manual
 
-### Resultado
-- Categoria atribuída conforme regra mais específica.
-- `classification_source = rule`.
-- Confiança média-alta (ex.: `0.80` a `0.90`).
+Ao revisar uma pendência:
+- usuário define categoria final;
+- sistema atualiza a transação com `classification_source=manual`;
+- sistema pode inserir/atualizar `MerchantMap` para aprendizado futuro.
 
-## 4) Similaridade fuzzy
+## Regras de transparência
 
-Fallback para descrições próximas a padrões conhecidos.
-
-### Estratégia
-- Comparar `merchant_norm` com chaves existentes no `MerchantMap`.
-- Se score >= limiar (ex.: `0.88`), usar categoria do match.
-- `classification_source = similarity`.
-- Confiança proporcional ao score.
-
-## 5) ReviewQueue
-
-Encaminhar para revisão quando não houver confiança suficiente.
-
-### Critérios de envio
-- sem match nas etapas anteriores;
-- conflito entre estratégias;
-- score abaixo de limiar;
-- regra bloqueada por exceção.
-
-### Resultado
-- Criar item pendente em `ReviewQueue`.
-- `classification_source = unclassified` ou `manual` após revisão.
-
-## Aprendizado com revisão manual
-
-Após decisão do usuário:
-
-- atualizar `Transaction.category`;
-- marcar origem como `manual`;
-- opcionalmente inserir/atualizar `MerchantMap` com `merchant_norm` e categoria escolhida.
-
-Isso melhora a assertividade futura sem dependência de LLM.
-
-## Tratamento de categorias técnicas
-
-- Se transação for `Pagamento de Fatura` ou `Transferência Interna`, marcar `is_technical = true`.
-- Essas transações ficam fora da análise principal de consumo.
-
-## Metas de qualidade do classificador no MVP
-
-- Alta precisão em merchants recorrentes.
-- Redução progressiva de itens em revisão com uso contínuo.
-- Transparência do motivo da classificação por transação.
+- Toda classificação deve ser explicável por fonte (`merchant_map`, `rule`, `similarity`, `manual`, `unclassified`).
+- Logs não devem expor dados sensíveis completos.
+- Mudanças de comportamento devem ser rastreáveis por versão de regras YAML.

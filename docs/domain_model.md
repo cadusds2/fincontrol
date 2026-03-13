@@ -1,139 +1,158 @@
-# Modelo de Domínio
+# Modelo de Domínio (MVP)
 
-## Entidades centrais
+Este documento define o contrato de dados do MVP com foco em implementabilidade.
+
+## Convenções gerais
+
+- `id`: chave primária.
+- `created_at` e `updated_at`: recomendados para auditoria em todas as entidades.
+- Todos os campos monetários devem usar precisão decimal (sem float).
+- Toda `Transaction` deve ter vínculo obrigatório com `Account` e `ImportBatch`.
 
 ## 1) Account
-Representa uma conta corrente ou cartão de crédito do usuário.
 
-**Responsabilidades:**
-- Identificar a origem financeira de uma transação.
-- Permitir múltiplas contas/cartões por banco.
+**Propósito:** representar conta corrente ou cartão de crédito de origem das transações.
 
-**Campos sugeridos:**
-- `id`
-- `bank_name` (ex.: Nubank, Itaú)
+**Campos obrigatórios (MVP):**
+- `bank_name`
 - `account_type` (`checking`, `credit_card`)
-- `display_name` (nome amigável)
-- `external_ref` (identificador opcional)
+- `display_name`
 - `is_active`
 
+**Campos opcionais (MVP):**
+- `external_ref`
+
+**Relações:**
+- 1:N com `ImportBatch`
+- 1:N com `Transaction`
+
 ## 2) ImportBatch
-Representa uma execução de importação de um arquivo CSV.
 
-**Responsabilidades:**
-- Rastrear arquivo importado e contexto de origem.
-- Registrar resultado do processamento.
+**Propósito:** rastrear uma execução de importação manual de CSV.
 
-**Campos sugeridos:**
-- `id`
-- `account_id` (FK Account)
-- `file_type` (extrato/fatura e banco)
+**Campos obrigatórios (MVP):**
+- `account_id` (FK `Account`)
+- `file_type` (layout/banco explícito)
 - `source_filename`
-- `imported_at`
-- `status` (`received`, `processed`, `failed`, `partial`)
+- `status` (`received`, `processed`, `partial`, `failed`)
 - `total_rows`
 - `imported_rows`
 - `duplicated_rows`
+- `imported_at`
+
+**Campos opcionais (MVP):**
 - `error_log`
 
-## 3) Transaction
-Representa um lançamento financeiro persistido.
+**Relações:**
+- N:1 com `Account`
+- 1:N com `Transaction`
 
-**Responsabilidades:**
-- Materializar movimento financeiro para classificação e relatório.
+## 3) Category
 
-**Campos sugeridos:**
-- `id`
-- `import_batch_id` (FK ImportBatch)
-- `account_id` (FK Account)
+**Propósito:** padronizar classificação e reportabilidade.
+
+**Campos obrigatórios (MVP):**
+- `name`
+- `slug`
+- `kind` (`consumo`, `tecnica`)
+- `is_reportable`
+
+**Campos opcionais (MVP):**
+- `description`
+- `is_active` (padrão `true`)
+
+**Regras obrigatórias (MVP):**
+- `kind=consumo` implica `is_reportable=true`.
+- `kind=tecnica` implica `is_reportable=false`.
+
+## 4) Transaction
+
+**Propósito:** registrar lançamento financeiro canônico para classificação e relatório.
+
+**Campos obrigatórios (MVP):**
+- `import_batch_id` (FK `ImportBatch`)
+- `account_id` (FK `Account`)
 - `transaction_date`
-- `posted_date` (opcional)
 - `description_raw`
 - `description_norm`
 - `merchant_norm`
 - `amount`
-- `currency` (default BRL)
+- `currency` (padrão `BRL`)
 - `direction` (`debit`, `credit`)
-- `category_id` (FK Category, opcional até classificar)
+- `raw_hash`
 - `classification_source` (`merchant_map`, `rule`, `similarity`, `manual`, `unclassified`)
+
+**Campos opcionais (MVP):**
+- `posted_date`
+- `category_id` (FK `Category`)
 - `classification_confidence` (0.0 a 1.0)
-- `is_technical`
 - `is_installment`
 - `installment_current`
 - `installment_total`
 - `installment_key`
-- `raw_hash` (apoio a deduplicação)
 
-## 4) MerchantMap
-Mapeia `merchant_norm` para categoria preferencial.
+**Regras obrigatórias (MVP):**
+- unicidade por `account_id + raw_hash`.
+- `classification_source=unclassified` na criação, antes do pipeline de classificação.
 
-**Responsabilidades:**
-- Aprender com revisão manual.
-- Aumentar precisão da classificação automática futura.
+## 5) MerchantMap
 
-**Campos sugeridos:**
-- `id`
-- `merchant_norm` (único por escopo definido)
-- `category_id` (FK Category)
+**Propósito:** mapear merchant recorrente para categoria com aprendizado incremental.
+
+**Campos obrigatórios (MVP):**
+- `merchant_norm`
+- `category_id` (FK `Category`)
+- `source` (`seed`, `manual_review`)
+
+**Campos opcionais (MVP):**
 - `confidence`
-- `source` (`seed`, `manual_review`, `migration`)
-- `last_used_at`
 - `usage_count`
+- `last_used_at`
 
-## 5) ReviewQueue
-Fila de transações que precisam de revisão manual.
+**Relações:**
+- N:1 com `Category`
 
-**Responsabilidades:**
-- Isolar casos de baixa confiança.
-- Priorizar tratamento do usuário.
+## 6) ReviewQueue
 
-**Campos sugeridos:**
-- `id`
-- `transaction_id` (FK Transaction, único)
-- `reason` (`low_confidence`, `conflict`, `no_match`, `rule_blocked`)
-- `suggested_category_id` (opcional)
-- `created_at`
-- `resolved_at` (opcional)
+**Propósito:** controlar pendências de classificação manual.
+
+**Campos obrigatórios (MVP):**
+- `transaction_id` (FK `Transaction`, único)
+- `reason` (`low_confidence`, `conflict`, `no_match`)
 - `status` (`pending`, `resolved`, `ignored`)
+- `created_at`
 
-## 6) Budget
-Orçamento por período e categoria.
+**Campos opcionais (MVP):**
+- `suggested_category_id` (FK `Category`)
+- `resolved_at`
+- `resolution_note`
 
-**Responsabilidades:**
-- Registrar meta de gastos para acompanhamento.
+**Relações:**
+- 1:1 com `Transaction`
+- N:1 opcional com `Category` (sugestão)
 
-**Campos sugeridos:**
-- `id`
-- `period_month` (ex.: 2025-01)
-- `category_id` (FK Category)
+## 7) Budget
+
+**Propósito:** definir orçamento mensal por categoria de consumo.
+
+**Campos obrigatórios (MVP):**
+- `period_month` (formato `YYYY-MM`)
+- `category_id` (FK `Category`)
 - `planned_amount`
+
+**Campos opcionais (MVP):**
 - `notes`
 
-## 7) Category (recomendada para o MVP)
-Catálogo de categorias de classificação e relatório.
+**Regras obrigatórias (MVP):**
+- `Budget` só pode apontar para `Category.kind=consumo`.
+- unicidade por `period_month + category_id`.
 
-**Responsabilidades:**
-- Padronizar taxonomia de consumo e categorias técnicas.
+## Relações-chave do domínio
 
-**Campos sugeridos:**
-- `id`
-- `name`
-- `slug`
-- `kind` (`consumption`, `technical`)
-- `is_reportable` (false para técnicas)
-- `is_active`
-
-## Relações principais
-
-- Uma `Account` possui muitos `ImportBatch`.
-- Uma `Account` possui muitas `Transaction`.
-- Um `ImportBatch` possui muitas `Transaction`.
-- Uma `Transaction` pode gerar um item em `ReviewQueue`.
-- Uma `Category` pode ser usada por `Transaction`, `MerchantMap` e `Budget`.
-- Um `MerchantMap` referencia uma `Category`.
-
-## Regras de domínio críticas
-
-- `Pagamento de Fatura` e `Transferência Interna` são categorias técnicas.
-- Transações com categorias técnicas não devem compor relatórios de consumo.
-- Parcelas devem ser registradas como movimentos mensais reais (cash basis).
+- `Account` 1:N `ImportBatch`
+- `Account` 1:N `Transaction`
+- `ImportBatch` 1:N `Transaction`
+- `Category` 1:N `Transaction`
+- `Category` 1:N `MerchantMap`
+- `Transaction` 1:1 `ReviewQueue`
+- `Category` 1:N `Budget`
