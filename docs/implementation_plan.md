@@ -1,190 +1,153 @@
 # Plano de Implementação (MVP)
 
-Documento tático para execução incremental do Finance Agent.
+## Como executar este plano
 
-## Como usar este plano (agentes e time)
+1. Confirmar restrições e decisões em `docs/decisions.md`.
+2. Executar por fase, sem antecipar escopo.
+3. Validar cada fase com checks objetivos.
+4. Atualizar documentação impactada no mesmo commit.
 
-1. Confirmar restrições e decisões em [`docs/decisions.md`](decisions.md).
-2. Selecionar a fase atual e executar apenas o escopo dela.
-3. Para cada fase, cumprir: **entradas → tarefas → validação → critério de saída**.
-4. Não antecipar escopo de fases futuras sem justificativa explícita.
-5. Atualizar documentação impactada no mesmo commit.
-
-## Regras transversais (válidas em todas as fases)
+## Regras transversais
 
 - Sem LLM no MVP.
 - Sem autodetecção de tipo de arquivo.
 - Sem autodetecção de conta/cartão.
-- Manter suporte a múltiplas contas/cartões por banco.
-- Excluir categorias técnicas dos relatórios principais.
-- Preservar cash basis para parcelas.
-
-Referências: [`AGENTS.md`](../AGENTS.md), [`docs/import_pipeline.md`](import_pipeline.md), [`docs/classification_strategy.md`](classification_strategy.md), [`docs/categories.md`](categories.md).
+- Suporte explícito a múltiplas contas e cartões por banco.
+- Exclusão de categorias técnicas dos relatórios principais.
+- Parcelamento em cash basis.
 
 ---
 
-## Fase 0 — Fundação do repositório
+## Fase 0 — Fundação documental
 
 ### Objetivo
-Estabelecer baseline documental e operacional para iniciar implementação sem ambiguidade.
+Fechar base documental e eliminar ambiguidades do MVP.
 
-### Entradas obrigatórias
-- [`README.md`](../README.md)
-- [`AGENTS.md`](../AGENTS.md)
-- [`docs/product_overview.md`](product_overview.md)
-- [`docs/decisions.md`](decisions.md)
-
-### Tarefas acionáveis
-- [ ] Validar consistência entre README, AGENTS, docs e prompts.
-- [ ] Garantir links internos navegáveis.
-- [ ] Consolidar regras de execução por agentes.
-
-### Validação mínima
-- Leitura guiada do repositório está explícita e sem conflito.
+### Tarefas
+- [ ] Revisar consistência entre README, AGENTS e docs.
+- [ ] Confirmar taxonomia e termos canônicos (`Category.kind`, `Category.is_reportable`).
+- [ ] Confirmar pipeline oficial de importação e classificação.
 
 ### Critério de saída
-- Agente consegue iniciar Fase 1 com contexto fechado.
+Documentação coerente e pronta para implementação assistida por agente.
 
 ---
 
-## Fase 1 — Modelo de dados e administração básica
+## Fase 1 — Setup Django + modelo de dados
 
 ### Objetivo
-Implementar entidades centrais no Django ORM com consistência de domínio.
-
-### Entradas obrigatórias
-- [`docs/domain_model.md`](domain_model.md)
-- [`docs/categories.md`](categories.md)
-- [`docs/decisions.md`](decisions.md)
+Colocar o projeto Django funcional com entidades centrais no admin.
 
 ### Tarefas acionáveis
-- [ ] Criar modelos: `Account`, `ImportBatch`, `Transaction`, `MerchantMap`, `ReviewQueue`, `Budget`, `Category`.
+- [ ] Criar projeto Django.
+- [ ] Criar apps base: `accounts`, `imports`, `transactions`, `classification`, `reports`.
+- [ ] Registrar apps no `settings`.
+- [ ] Implementar models do MVP: `Account`, `ImportBatch`, `Transaction`, `Category`, `MerchantMap`, `ReviewQueue`, `Budget`.
 - [ ] Criar migrações iniciais.
-- [ ] Incluir cadastro administrativo mínimo para contas e categorias.
-- [ ] Garantir suporte a categorias técnicas com sinalização de reportabilidade.
+- [ ] Registrar models no Django Admin.
+- [ ] Criar seed inicial de categorias de consumo.
+- [ ] Criar seed inicial de categorias técnicas.
+- [ ] Validar via admin o cadastro e a visualização de dados básicos.
 
 ### Validação mínima
-- Integridade de relacionamentos e constraints.
-- Seed mínimo de categorias essenciais.
+- [ ] `python manage.py makemigrations --check` sem alterações pendentes.
+- [ ] `python manage.py migrate` executa sem erro.
+- [ ] Admin abre e permite CRUD básico de `Account`, `Category` e `Transaction`.
 
 ### Critério de saída
-- Schema funcional e aderente a `docs/domain_model.md`.
+Base de dados e administração inicial prontas para iniciar importação.
 
 ---
 
 ## Fase 2 — Importação manual de CSV
 
 ### Objetivo
-Entregar ingestão manual com rastreabilidade por lote e deduplicação básica.
-
-### Entradas obrigatórias
-- [`docs/import_pipeline.md`](import_pipeline.md)
-- [`docs/domain_model.md`](domain_model.md)
-- [`docs/decisions.md`](decisions.md)
+Entregar ingestão manual com parser dedicado e deduplicação canônica.
 
 ### Tarefas acionáveis
-- [ ] Criar tela/formulário de upload com seleção manual de tipo e conta/cartão.
-- [ ] Implementar criação e atualização de status de `ImportBatch`.
-- [ ] Implementar parsers dos quatro layouts suportados no MVP.
-- [ ] Transformar registros para formato canônico de `Transaction`.
-- [ ] Aplicar deduplicação por hash canônico.
+- [ ] Criar formulário de upload com seleção manual de `file_type` e `account_id`.
+- [ ] Criar ciclo de status do `ImportBatch`.
+- [ ] Implementar os quatro parsers do MVP.
+- [ ] Transformar linhas em `Transaction` canônica.
+- [ ] Aplicar deduplicação por `raw_hash` (`account_id + raw_hash`).
 
 ### Validação mínima
-- Importação de CSV válido com feedback de sucesso/erro.
-- Reimportação não gera duplicação acidental relevante.
+- [ ] Importação válida gera lote `processed`.
+- [ ] Reimportação do mesmo arquivo incrementa `duplicated_rows` e não duplica transações.
 
 ### Critério de saída
-- Fluxo de importação funcional ponta a ponta, com rastreabilidade.
+Fluxo de importação rastreável e idempotente no nível esperado do MVP.
 
 ---
 
-## Fase 3 — Classificação automática sem LLM
+## Fase 3 — Classificação automática
 
 ### Objetivo
-Classificar transações com pipeline determinístico, auditável e transparente.
-
-### Entradas obrigatórias
-- [`docs/classification_strategy.md`](classification_strategy.md)
-- [`docs/categories.md`](categories.md)
-- [`docs/decisions.md`](decisions.md)
+Ativar pipeline determinístico sem LLM.
 
 ### Tarefas acionáveis
 - [ ] Implementar normalização textual.
-- [ ] Implementar classificação por `MerchantMap`.
+- [ ] Implementar match por `MerchantMap`.
 - [ ] Implementar motor de regras YAML.
 - [ ] Implementar fallback por similaridade fuzzy.
 - [ ] Encaminhar baixa confiança para `ReviewQueue`.
 
 ### Validação mínima
-- Cada transação termina classificada ou em revisão.
-- Origem da classificação registrada (`merchant_map`, `rule`, `similarity`, `manual`, `unclassified`).
+- [ ] Toda transação termina classificada ou pendente de revisão.
+- [ ] `classification_source` preenchido corretamente.
 
 ### Critério de saída
-- Pipeline completo ativo sem uso de LLM.
+Classificação automática funcional e auditável.
 
 ---
 
-## Fase 4 — Revisão manual e aprendizado
+## Fase 4 — Revisão manual
 
 ### Objetivo
-Fechar ciclo humano-no-loop e melhorar assertividade ao longo do uso.
-
-### Entradas obrigatórias
-- [`docs/classification_strategy.md`](classification_strategy.md)
-- [`docs/domain_model.md`](domain_model.md)
+Fechar o ciclo humano-no-loop.
 
 ### Tarefas acionáveis
-- [ ] Criar tela de fila de revisão.
-- [ ] Permitir edição e confirmação de categoria.
-- [ ] Atualizar `MerchantMap` de forma segura após revisão.
-- [ ] Registrar origem final como `manual` quando aplicável.
+- [ ] Implementar listagem e detalhe da `ReviewQueue`.
+- [ ] Permitir categorização manual da transação.
+- [ ] Atualizar `classification_source` para `manual` quando aplicável.
+- [ ] Retroalimentar `MerchantMap` de forma controlada.
 
 ### Validação mínima
-- Revisor consegue processar pendências de ponta a ponta.
+- [ ] Usuário resolve pendências de ponta a ponta.
 
 ### Critério de saída
-- Queda observável de reincidência de casos ambíguos iguais.
+Fila de revisão operacional com aprendizado incremental.
 
 ---
 
-## Fase 5 — Relatórios e orçamento básico
+## Fase 5 — Relatórios e orçamento
 
 ### Objetivo
-Entregar visão mensal simples de consumo real.
-
-### Entradas obrigatórias
-- [`docs/categories.md`](categories.md)
-- [`docs/decisions.md`](decisions.md)
+Entregar visão de consumo mensal confiável.
 
 ### Tarefas acionáveis
-- [ ] Implementar relatório por categoria e período.
-- [ ] Excluir categorias técnicas dos totais principais.
-- [ ] Exibir visão inicial de orçamento (`Budget` vs realizado).
+- [ ] Relatório por categoria e período.
+- [ ] Aplicar filtro por `Category.is_reportable=true` no consumo principal.
+- [ ] Exibir orçamento (`Budget`) versus realizado.
 
 ### Validação mínima
-- Totais de consumo não incluem `Pagamento de Fatura` e `Transferência Interna`.
+- [ ] Categorias técnicas não aparecem no total de consumo.
 
 ### Critério de saída
-- Usuário visualiza consumo sem distorção por transações técnicas.
+Relatórios básicos úteis para uso mensal.
 
 ---
 
-## Fase 6 — Hardening do MVP
+## Fase 6 — Estabilização do MVP
 
 ### Objetivo
-Preparar versão estável para uso contínuo.
-
-### Entradas obrigatórias
-- Fases 1 a 5 concluídas.
+Aumentar robustez para uso recorrente.
 
 ### Tarefas acionáveis
-- [ ] Cobrir fluxos críticos com testes automatizados (importação, classificação, revisão).
-- [ ] Endurecer tratamento de erros e observabilidade.
-- [ ] Revisar UX dos fluxos principais.
-- [ ] Consolidar documentação operacional final.
-
-### Validação mínima
-- Fluxos críticos estáveis em execução recorrente.
+- [ ] Cobrir importação, classificação, revisão e relatório com testes automatizados.
+- [ ] Endurecer tratamento de erro e logs.
+- [ ] Ajustar UX dos fluxos críticos.
+- [ ] Consolidar documentação operacional.
 
 ### Critério de saída
-- MVP pronto para rotina mensal do usuário-alvo.
+MVP estável para operação contínua do usuário-alvo.

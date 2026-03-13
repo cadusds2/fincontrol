@@ -2,55 +2,49 @@
 
 ## Problema
 
-Usuários com múltiplas contas e cartões têm dificuldade para consolidar gastos em uma visão única, principalmente quando os dados vêm de extratos/faturas CSV com formatos distintos por banco.
+Consolidar gastos pessoais de múltiplas contas e cartões é difícil quando os dados chegam em CSVs com layouts diferentes por banco.
 
 ## Proposta do Finance Agent
 
-O Finance Agent é um sistema web que centraliza importações de CSV bancários, classifica transações automaticamente por regras determinísticas e direciona casos ambíguos para revisão manual.
+Sistema web que centraliza importação manual de CSV, classifica transações por pipeline determinístico e envia casos ambíguos para revisão manual.
 
 ## Objetivo do MVP
 
-Entregar um fluxo completo e utilizável para:
-
-1. importar CSVs de fontes suportadas;
-2. classificar transações sem LLM;
+Entregar um fluxo completo para:
+1. importar CSVs suportados;
+2. classificar sem LLM;
 3. revisar pendências;
-4. gerar visão simples de gastos por categoria.
+4. gerar relatório simples de consumo por categoria.
 
 ## Usuário-alvo inicial
 
-Pessoa física que:
-- usa Nubank e/ou Itaú;
-- possui múltiplos cartões/contas;
-- quer controle mensal de consumo com baixo esforço operacional.
+Pessoa física com Nubank e/ou Itaú, com múltiplas contas/cartões e necessidade de controle mensal simples.
 
 ## Fontes suportadas no MVP
 
-- Extrato da conta Nubank.
-- Fatura do cartão Nubank.
-- Extrato da conta Itaú.
-- Fatura do cartão Itaú.
+- extrato_conta_nubank
+- fatura_cartao_nubank
+- extrato_conta_itau
+- fatura_cartao_itau
 
-## Premissas operacionais do MVP
+## Premissas operacionais
 
-- Tipo de arquivo é informado manualmente no upload.
-- Conta/cartão é selecionado manualmente no upload.
-- Não haverá integração por API bancária.
-- Não haverá LLM na classificação.
+- Seleção manual de tipo de arquivo no upload.
+- Seleção manual de conta/cartão no upload.
+- Sem integração bancária por API.
+- Sem LLM no MVP.
 
 ## Requisitos funcionais de alto nível
 
-- Cadastrar e manter múltiplas contas/cartões por banco.
-- Importar arquivo CSV associado a um `ImportBatch`.
-- Persistir transações com rastreabilidade de origem.
-- Classificar transações por pipeline determinístico.
-- Encaminhar baixa confiança para `ReviewQueue`.
-- Permitir revisão manual e retroalimentar `MerchantMap`.
-- Exibir relatórios básicos de consumo por categoria.
+- Cadastro de múltiplas contas/cartões por banco.
+- Importação com `ImportBatch` e rastreabilidade.
+- Deduplicação por `raw_hash` canônico (`account_id + raw_hash`).
+- Classificação: normalização → MerchantMap → regras YAML → similaridade → ReviewQueue.
+- Revisão manual com aprendizado incremental em `MerchantMap`.
+- Relatórios considerando apenas categorias reportáveis (`Category.is_reportable=true`).
 
-## Requisitos não funcionais de alto nível
+## Requisitos não funcionais
 
 - Simplicidade de operação local (Django + SQLite).
-- Reprodutibilidade do processo de classificação.
-- Transparência de regra aplicada por transação.
-- Base preparada para evolução futura com LLM, sem dependência no MVP.
+- Reprodutibilidade e transparência da classificação.
+- Base preparada para evolução pós-MVP sem quebrar decisões atuais.

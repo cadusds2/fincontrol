@@ -1,70 +1,68 @@
-# Pipeline de Importação de CSV
+# Pipeline de Importação Manual (MVP)
 
 ## Objetivo
 
-Detalhar o fluxo de importação manual de extratos/faturas no MVP, com rastreabilidade por lote e preparação para classificação.
+Importar CSV com rastreabilidade por lote, validação por parser dedicado e deduplicação canônica.
 
-## Entrada do usuário (obrigatória)
+## Entradas obrigatórias no upload
 
-Na tela de importação, o usuário deve informar:
-
-1. **Tipo de arquivo** (seleção manual):
-   - Extrato da conta Nubank
-   - Fatura do cartão Nubank
-   - Extrato da conta Itaú
-   - Fatura do cartão Itaú
-2. **Conta/Cartão** (seleção manual):
-   - registro de `Account` já cadastrado.
-3. **Arquivo CSV**.
+1. `file_type` (seleção manual):
+   - extrato_conta_nubank
+   - fatura_cartao_nubank
+   - extrato_conta_itau
+   - fatura_cartao_itau
+2. `account_id` (seleção manual de conta/cartão já cadastrado)
+3. arquivo CSV
 
 Não há autodetecção no MVP.
 
 ## Etapas do pipeline
 
-## 1) Recebimento e criação do lote
-- Validar presença de tipo, conta/cartão e arquivo.
+### 1) Recebimento e criação do lote
+- Validar presença de `file_type`, `account_id` e arquivo.
 - Criar `ImportBatch` com status `received`.
-- Registrar metadados básicos do arquivo.
 
-## 2) Leitura e validação estrutural
-- Ler CSV com parser específico por `file_type`.
-- Validar colunas obrigatórias por layout.
-- Se falha estrutural total, marcar lote como `failed`.
+### 2) Leitura e validação estrutural
+- Selecionar parser dedicado conforme `file_type`.
+- Validar colunas obrigatórias do layout.
+- Se falha estrutural total, finalizar `ImportBatch` como `failed`.
 
-## 3) Transformação para formato canônico
+### 3) Transformação para formato canônico
 Para cada linha válida:
-- mapear data, descrição, valor, sinal e campos auxiliares;
+- mapear data, descrição, valor, moeda e direção;
 - preencher `description_raw`;
 - gerar `description_norm` e `merchant_norm`;
-- identificar metadados de parcela quando disponíveis.
+- mapear metadados de parcela quando existirem.
 
-## 4) Deduplicação (escopo MVP)
-- Calcular `raw_hash` com combinação estável de campos canônicos.
-- Se hash já existir na mesma conta e janela temporal definida, sinalizar como duplicado.
-- Não persistir duplicatas óbvias; contabilizar em `duplicated_rows`.
+### 4) Deduplicação canônica (MVP)
+- Calcular `raw_hash` sobre campos normalizados.
+- Fórmula de referência do MVP:
+  - `raw_hash = sha256(account_id + transaction_date + amount + description_norm)`
+- Escopo de unicidade: `account_id + raw_hash`.
+- Se já existir transação com a mesma chave canônica, tratar como duplicata.
+- Duplicata não é persistida e incrementa `ImportBatch.duplicated_rows`.
 
-## 5) Persistência de transações
+### 5) Persistência de transações
 - Criar `Transaction` vinculada a `ImportBatch` e `Account`.
-- Definir `classification_source = unclassified` inicialmente.
-- Persistir em lote com tratamento de erro por linha.
+- Iniciar com `classification_source=unclassified`.
 
-## 6) Atualização de status do lote
-- Atualizar contadores (`total_rows`, `imported_rows`, `duplicated_rows`).
+### 6) Fechamento do lote
+- Atualizar `total_rows`, `imported_rows`, `duplicated_rows`.
 - Definir status final:
-  - `processed` (sem erros relevantes);
-  - `partial` (com erros/linhas descartadas);
-  - `failed` (sem linhas importadas).
+  - `processed`: sem erros relevantes;
+  - `partial`: com linhas descartadas/erros parciais;
+  - `failed`: sem linhas importadas.
 
-## 7) Disparo da classificação
-- Ao final da importação, acionar pipeline de classificação para as transações do lote.
+### 7) Disparo da classificação
+- Acionar pipeline de classificação para transações importadas no lote.
 
-## Regras específicas por tipo de origem
+## Regras de parser no MVP
 
-- Cada `file_type` terá parser dedicado, com mapeamento explícito de colunas.
-- Mudanças de layout bancário exigem atualização versionada do parser correspondente.
+- Cada `file_type` possui parser dedicado e testável.
+- Mudanças de layout bancário exigem atualização explícita do parser correspondente.
 
 ## Observabilidade e auditoria
 
-- Todo erro de linha deve registrar contexto mínimo (linha, motivo).
-- Não registrar dados sensíveis completos em logs de erro.
-- Toda transação deve manter vínculo com `ImportBatch` para rastreio.
+- Registrar erros por linha com motivo objetivo.
+- Não expor dados sensíveis completos em logs.
+- Manter vínculo obrigatório entre `Transaction` e `ImportBatch`.

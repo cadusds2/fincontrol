@@ -1,59 +1,57 @@
 # Finance Agent
 
-Sistema web para controle de gastos pessoais com foco em **importação manual de extratos/faturas em CSV**, **classificação determinística sem LLM** e **revisão manual**.
+Sistema web para controle de gastos pessoais com foco em **importação manual de CSV**, **classificação determinística sem LLM** e **revisão manual**.
 
-> Status: documentação-base do projeto para execução incremental do MVP por agentes de IA.
+> Status: documentação-base do MVP para execução incremental por agentes de IA.
 
 ## Objetivo do projeto
 
-O Finance Agent resolve um fluxo prático de finanças pessoais:
-
-1. importar arquivos CSV de bancos e cartões;
-2. classificar transações automaticamente sem LLM;
-3. revisar casos ambíguos com intervenção humana;
-4. visualizar gastos de consumo por categoria.
+Entregar um fluxo prático para:
+1. importar extratos/faturas em CSV;
+2. classificar transações sem LLM;
+3. revisar casos ambíguos;
+4. visualizar consumo por categoria.
 
 ## Escopo do MVP
 
 ### Funcionalidades principais
-- Importação manual de CSV com escolha explícita de:
-  - tipo de arquivo (`extrato_conta` ou `fatura_cartao`);
-  - conta/cartão de destino.
-- Suporte inicial para:
-  - Extrato da conta Nubank;
-  - Fatura do cartão Nubank;
-  - Extrato da conta Itaú;
-  - Fatura do cartão Itaú.
-- Pipeline de classificação sem LLM:
-  1. normalização;
-  2. `MerchantMap`;
-  3. regras YAML;
-  4. similaridade fuzzy;
-  5. fila de revisão.
-- Revisão manual com aprendizado incremental via `MerchantMap`.
-- Relatórios simples de consumo por categoria.
+- Importação manual com seleção explícita de `file_type` e `account_id`.
+- Suporte inicial a 4 layouts:
+  - extrato_conta_nubank
+  - fatura_cartao_nubank
+  - extrato_conta_itau
+  - fatura_cartao_itau
+- Pipeline oficial de classificação:
+  1. normalização
+  2. `MerchantMap`
+  3. regras YAML
+  4. similaridade fuzzy
+  5. `ReviewQueue`
+- Relatórios de consumo usando apenas categorias reportáveis.
+
+### Taxonomia oficial do MVP
+
+**Consumo (`Category.kind=consumo`, `Category.is_reportable=true`):**
+Moradia, Alimentação, Transporte, Saúde, Lazer, Assinaturas, Educação, Compras, Contas/Serviços, Investimentos, Outros.
+
+**Técnicas (`Category.kind=tecnica`, `Category.is_reportable=false`):**
+Pagamento de Fatura, Transferência Interna, Movimentação de Investimentos.
 
 ### Fora do MVP
-- Classificação por LLM.
+- LLM para classificação.
 - Autodetecção de tipo de arquivo.
 - Autodetecção de conta/cartão.
-- Integrações bancárias por API.
+- Integrações por API bancária.
 
 ## Restrições de domínio já definidas
 
-- `Pagamento de Fatura` **não é gasto de consumo**.
-- `Transferência Interna` **não é gasto de consumo**.
-- Categorias técnicas obrigatórias:
-  - `Pagamento de Fatura`
-  - `Transferência Interna`
-- Categorias técnicas não entram nos relatórios principais.
-- Parcelamento no cartão no MVP segue **cash basis** (movimentos mensais reais da fatura).
+- Categorias técnicas não entram no relatório principal de consumo.
+- Parcelamento no cartão segue **cash basis** no MVP.
+- Deduplicação de transação por hash canônico (`raw_hash`) com escopo `account_id + raw_hash`.
 
-Consulte o registro oficial em [`docs/decisions.md`](docs/decisions.md).
+Consulte o registro formal em [`docs/decisions.md`](docs/decisions.md).
 
 ## Trilha de leitura obrigatória para agentes
-
-> Antes de qualquer implementação, seguir esta sequência:
 
 1. [`README.md`](README.md)
 2. [`docs/product_overview.md`](docs/product_overview.md)
@@ -64,17 +62,6 @@ Consulte o registro oficial em [`docs/decisions.md`](docs/decisions.md).
 7. [`docs/classification_strategy.md`](docs/classification_strategy.md)
 8. [`docs/categories.md`](docs/categories.md)
 9. [`docs/implementation_plan.md`](docs/implementation_plan.md)
-
-> Ordem canônica alinhada ao contrato em [`AGENTS.md`](AGENTS.md).
-
-## Fluxo de trabalho esperado para implementações
-
-1. **Ler e alinhar contexto** (trilha obrigatória acima).
-2. **Selecionar fase ativa** em [`docs/implementation_plan.md`](docs/implementation_plan.md).
-3. **Implementar incremento mínimo** sem violar restrições do MVP.
-4. **Validar** com testes/checks do escopo alterado.
-5. **Atualizar documentação impactada no mesmo commit**.
-6. **Registrar decisão nova** em [`docs/decisions.md`](docs/decisions.md), quando aplicável.
 
 ## Estrutura de documentação
 
@@ -88,12 +75,3 @@ Consulte o registro oficial em [`docs/decisions.md`](docs/decisions.md).
 - Plano de implementação: [`docs/implementation_plan.md`](docs/implementation_plan.md)
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md)
 - Glossário: [`docs/glossary.md`](docs/glossary.md)
-
-## Prompts operacionais para Codex
-
-- [`prompts/codex/prompt_initialize_repo.md`](prompts/codex/prompt_initialize_repo.md)
-- [`prompts/codex/prompt_create_models.md`](prompts/codex/prompt_create_models.md)
-- [`prompts/codex/prompt_create_import_pipeline.md`](prompts/codex/prompt_create_import_pipeline.md)
-- [`prompts/codex/prompt_review_code.md`](prompts/codex/prompt_review_code.md)
-
-Use sempre em conjunto com [`AGENTS.md`](AGENTS.md).
