@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -60,6 +61,21 @@ class Transaction(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["account", "raw_hash"], name="transaction_account_raw_hash_unico")
         ]
+
+    def clean(self) -> None:
+        super().clean()
+        if (
+            self.account_id
+            and self.import_batch_id
+            and self.import_batch.account_id != self.account_id
+        ):
+            raise ValidationError(
+                {"import_batch": "import_batch.account deve ser igual a transaction.account."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.transaction_date} - {self.amount} {self.currency}"

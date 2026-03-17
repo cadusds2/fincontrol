@@ -1,7 +1,73 @@
-"""Testes do app (estrutura inicial do MVP)."""
+from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
+
+from accounts.models import Account
+from imports.models import ImportBatch
+from transactions.models import Transaction
 
 
-class EstruturaInicialTests(TestCase):
-    def test_placeholder(self) -> None:
-        self.assertTrue(True)
+class TransactionModelTests(TestCase):
+    def setUp(self) -> None:
+        self.account_a = Account.objects.create(
+            bank_name="Nubank",
+            account_type=Account.TipoConta.CONTA_CORRENTE,
+            display_name="Conta A",
+        )
+        self.account_b = Account.objects.create(
+            bank_name="Itaú",
+            account_type=Account.TipoConta.CONTA_CORRENTE,
+            display_name="Conta B",
+        )
+        self.batch_account_a = ImportBatch.objects.create(
+            account=self.account_a,
+            file_type=ImportBatch.TipoArquivo.EXTRATO_CONTA_NUBANK,
+            source_filename="extrato.csv",
+            status=ImportBatch.Status.RECEBIDO,
+            imported_at=timezone.now(),
+        )
+
+    def test_clean_rejects_account_mismatch_with_import_batch(self) -> None:
+        transaction = Transaction(
+            import_batch=self.batch_account_a,
+            account=self.account_b,
+            transaction_date=timezone.now().date(),
+            description_raw="Compra padaria",
+            description_norm="compra padaria",
+            merchant_norm="padaria",
+            amount="10.00",
+            direction=Transaction.Direction.DEBITO,
+            raw_hash="abc123",
+        )
+
+        with self.assertRaises(ValidationError):
+            transaction.clean()
+
+    def test_save_rejects_account_mismatch_with_import_batch(self) -> None:
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                import_batch=self.batch_account_a,
+                account=self.account_b,
+                transaction_date=timezone.now().date(),
+                description_raw="Compra mercado",
+                description_norm="compra mercado",
+                merchant_norm="mercado",
+                amount="25.00",
+                direction=Transaction.Direction.DEBITO,
+                raw_hash="def456",
+            )
+
+    def test_save_allows_matching_account_and_import_batch(self) -> None:
+        transaction = Transaction.objects.create(
+            import_batch=self.batch_account_a,
+            account=self.account_a,
+            transaction_date=timezone.now().date(),
+            description_raw="Compra farmácia",
+            description_norm="compra farmacia",
+            merchant_norm="farmacia",
+            amount="30.00",
+            direction=Transaction.Direction.DEBITO,
+            raw_hash="ghi789",
+        )
+
+        self.assertEqual(transaction.account_id, self.batch_account_a.account_id)
