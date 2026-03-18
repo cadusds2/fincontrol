@@ -5,8 +5,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from accounts.models import Account
-from classification.models import ReviewQueue
+from classification.models import Category, ReviewQueue
 from imports.models import ImportBatch
+from reports.models import Budget
 from transactions.models import Transaction
 
 
@@ -65,3 +66,39 @@ class ReviewQueueModelTests(TestCase):
         )
 
         self.assertIsNone(review_item.resolved_at)
+
+
+class CategoryModelTests(TestCase):
+    def test_kind_change_to_tecnica_is_blocked_when_category_has_budget(self) -> None:
+        category = Category.objects.create(
+            name="Alimentação",
+            slug="alimentacao",
+            kind=Category.Kind.CONSUMO,
+            is_reportable=True,
+        )
+        Budget.objects.create(
+            period_month="2026-03",
+            category=category,
+            planned_amount="800.00",
+        )
+
+        category.kind = Category.Kind.TECNICA
+        category.is_reportable = False
+        with self.assertRaises(ValidationError) as ctx:
+            category.save()
+
+        self.assertIn("kind", ctx.exception.message_dict)
+
+    def test_kind_change_to_tecnica_is_allowed_without_budget(self) -> None:
+        category = Category.objects.create(
+            name="Reserva técnica",
+            slug="reserva-tecnica",
+            kind=Category.Kind.CONSUMO,
+            is_reportable=True,
+        )
+
+        category.kind = Category.Kind.TECNICA
+        category.is_reportable = False
+        category.save()
+
+        self.assertEqual(category.kind, Category.Kind.TECNICA)

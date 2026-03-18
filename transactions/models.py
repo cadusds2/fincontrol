@@ -65,6 +65,9 @@ class Transaction(models.Model):
 
     def clean(self) -> None:
         super().clean()
+        if self._state.adding and self.classification_source != self.ClassificationSource.NAO_CLASSIFICADA:
+            raise ValidationError({"classification_source": "Novas transações devem iniciar como unclassified."})
+
         if not self.import_batch_id or not self.account_id:
             return
 

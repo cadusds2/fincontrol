@@ -34,6 +34,24 @@ class Category(models.Model):
     def __str__(self) -> str:
         return self.name
 
+    def clean(self) -> None:
+        super().clean()
+        if not self.pk:
+            return
+
+        previous_kind = Category.objects.filter(pk=self.pk).values_list("kind", flat=True).first()
+        if previous_kind is None:
+            return
+
+        if previous_kind != self.kind and self.kind != self.Kind.CONSUMO and self.budgets.exists():
+            raise ValidationError(
+                {"kind": "Não é permitido definir kind=tecnica para categoria vinculada a budgets."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
 class MerchantMap(models.Model):
     """Mapeamento incremental de merchant normalizado para categoria."""

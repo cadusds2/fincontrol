@@ -87,3 +87,38 @@ class TransactionModelTests(TestCase):
             )
 
         self.assertIn("import_batch", ctx.exception.message_dict)
+
+    def test_create_rejects_non_unclassified_source(self) -> None:
+        with self.assertRaises(ValidationError) as ctx:
+            Transaction.objects.create(
+                import_batch=self.batch_account_a,
+                account=self.account_a,
+                transaction_date=timezone.now().date(),
+                description_raw="Compra criada como manual",
+                description_norm="compra criada como manual",
+                merchant_norm="mercado",
+                amount="25.00",
+                direction=Transaction.Direction.DEBITO,
+                raw_hash="manual-on-create",
+                classification_source=Transaction.ClassificationSource.MANUAL,
+            )
+
+        self.assertIn("classification_source", ctx.exception.message_dict)
+
+    def test_update_allows_transition_from_unclassified_to_manual(self) -> None:
+        transaction = Transaction.objects.create(
+            import_batch=self.batch_account_a,
+            account=self.account_a,
+            transaction_date=timezone.now().date(),
+            description_raw="Compra para classificar",
+            description_norm="compra para classificar",
+            merchant_norm="padaria",
+            amount="42.00",
+            direction=Transaction.Direction.DEBITO,
+            raw_hash="unclassified-then-manual",
+        )
+
+        transaction.classification_source = Transaction.ClassificationSource.MANUAL
+        transaction.save()
+
+        self.assertEqual(transaction.classification_source, Transaction.ClassificationSource.MANUAL)

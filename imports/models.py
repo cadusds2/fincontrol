@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -35,3 +36,23 @@ class ImportBatch(models.Model):
 
     def __str__(self) -> str:
         return f"{self.source_filename} - {self.get_status_display()}"
+
+    def clean(self) -> None:
+        super().clean()
+        if not self.pk:
+            return
+
+        previous_account_id = (
+            ImportBatch.objects.filter(pk=self.pk).values_list("account_id", flat=True).first()
+        )
+        if previous_account_id is None:
+            return
+
+        if previous_account_id != self.account_id and self.transactions.exists():
+            raise ValidationError(
+                {"account": "Não é permitido trocar account de um lote que já possui transações importadas."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
