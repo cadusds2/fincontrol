@@ -31,3 +31,7 @@ class Budget(models.Model):
         super().clean()
         if self.category_id and self.category.kind != self.category.Kind.CONSUMO:
             raise ValidationError({"category": "Budget só pode apontar para categoria com kind=consumo."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
