@@ -110,3 +110,7 @@ class ReviewQueue(models.Model):
         super().clean()
         if self.status in {self.Status.RESOLVIDA, self.Status.IGNORADA} and not self.resolved_at:
             raise ValidationError("resolved_at é obrigatório quando status é resolved ou ignored.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
