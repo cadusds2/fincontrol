@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
@@ -29,7 +30,15 @@ class Budget(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if self.category_id and self.category.kind != self.category.Kind.CONSUMO:
+        if not self.category_id:
+            return
+
+        category_model = apps.get_model("classification", "Category")
+        category_kind = category_model.objects.filter(pk=self.category_id).values_list("kind", flat=True).first()
+        if category_kind is None:
+            raise ValidationError({"category": "Categoria informada não existe."})
+
+        if category_kind != self.category.Kind.CONSUMO:
             raise ValidationError({"category": "Budget só pode apontar para categoria com kind=consumo."})
 
     def save(self, *args, **kwargs):

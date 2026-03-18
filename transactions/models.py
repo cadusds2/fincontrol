@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.apps import apps
 
 
 class Transaction(models.Model):
@@ -64,14 +65,18 @@ class Transaction(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if (
-            self.account_id
-            and self.import_batch_id
-            and self.import_batch.account_id != self.account_id
-        ):
-            raise ValidationError(
-                {"import_batch": "import_batch.account deve ser igual a transaction.account."}
-            )
+        if not self.import_batch_id or not self.account_id:
+            return
+
+        import_batch_model = apps.get_model("imports", "ImportBatch")
+        import_batch_account_id = import_batch_model.objects.filter(pk=self.import_batch_id).values_list(
+            "account_id", flat=True
+        ).first()
+        if import_batch_account_id is None:
+            raise ValidationError({"import_batch": "ImportBatch informado não existe."})
+
+        if import_batch_account_id != self.account_id:
+            raise ValidationError({"import_batch": "import_batch.account deve ser igual a transaction.account."})
 
     def save(self, *args, **kwargs):
         self.full_clean()

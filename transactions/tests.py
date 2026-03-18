@@ -71,3 +71,19 @@ class TransactionModelTests(TestCase):
         )
 
         self.assertEqual(transaction.account_id, self.batch_account_a.account_id)
+
+    def test_save_rejects_nonexistent_import_batch_with_validation_error(self) -> None:
+        with self.assertRaises(ValidationError) as ctx:
+            Transaction.objects.create(
+                import_batch_id=999999,
+                account=self.account_a,
+                transaction_date=timezone.now().date(),
+                description_raw="Compra inválida",
+                description_norm="compra invalida",
+                merchant_norm="invalida",
+                amount="11.00",
+                direction=Transaction.Direction.DEBITO,
+                raw_hash="nonexistent-batch",
+            )
+
+        self.assertIn("import_batch", ctx.exception.message_dict)

@@ -48,3 +48,13 @@ class BudgetModelTests(TestCase):
         )
 
         self.assertEqual(budget.category_id, self.categoria_consumo.id)
+
+    def test_create_rejeita_categoria_inexistente_com_validation_error(self) -> None:
+        with self.assertRaises(ValidationError) as ctx:
+            Budget.objects.create(
+                period_month="2026-03",
+                category_id=999999,
+                planned_amount=Decimal("150.00"),
+            )
+
+        self.assertIn("category", ctx.exception.message_dict)
