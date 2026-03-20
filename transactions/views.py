@@ -1,1 +1,1 @@
-"""Views do app (estrutura inicial do MVP)."""
+"""Views do app transactions (estrutura inicial do MVP)."""

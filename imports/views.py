@@ -1,1 +1,1 @@
-"""Views do app (estrutura inicial do MVP)."""
+"""Views do app imports (estrutura inicial do MVP)."""
