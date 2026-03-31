@@ -1,11 +1,12 @@
-"""Views do app de relatórios (estrutura inicial do MVP)."""
+"""Views do app reports (estrutura inicial do MVP)."""
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 
 def pagina_inicial(request: HttpRequest) -> HttpResponse:
+    """Página inicial mínima para validar subida do projeto."""
     contexto = {
         "titulo": "Finance Agent",
-        "descricao": "Estrutura inicial do MVP em Django está ativa.",
+        "descricao": "Base inicial do MVP em Django pronta para as próximas fases.",
     }
     return render(request, "pagina_inicial.html", contexto)
