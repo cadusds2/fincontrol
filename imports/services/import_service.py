@@ -5,14 +5,18 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import unicodedata
 from dataclasses import dataclass
 
 from django.db import transaction
 
 from imports.models import ImportBatch
 from imports.parsers import MAPA_PARSERS
+from imports.services.normalization import extrair_merchant, normalizar_texto
 from transactions.models import Transaction
+
+
+class ErroEstruturalArquivoCsv(Exception):
+    """Erro para falhas estruturais do arquivo CSV."""
 
 
 @dataclass
@@ -21,11 +25,21 @@ class ResultadoImportacao:
     linhas_importadas: int = 0
     linhas_puladas: int = 0
     linhas_duplicadas: int = 0
-    erros: list[str] | None = None
+    erros_estruturais: list[str] | None = None
+    erros_por_linha: list[str] | None = None
+    erros_fatais: list[str] | None = None
 
     def __post_init__(self) -> None:
-        if self.erros is None:
-            self.erros = []
+        if self.erros_estruturais is None:
+            self.erros_estruturais = []
+        if self.erros_por_linha is None:
+            self.erros_por_linha = []
+        if self.erros_fatais is None:
+            self.erros_fatais = []
+
+    @property
+    def total_erros(self) -> int:
+        return len(self.erros_estruturais) + len(self.erros_por_linha) + len(self.erros_fatais)
 
 
 def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportacao:
@@ -46,11 +60,14 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
 
     try:
         if not lote.file:
-            raise ValueError("Nenhum arquivo CSV foi anexado ao lote.")
+            raise ErroEstruturalArquivoCsv("Nenhum arquivo CSV foi anexado ao lote.")
 
-        dados_csv = lote.file.read()
-        leitor = csv.DictReader(io.StringIO(dados_csv.decode("utf-8-sig")))
-        parser.validar_cabecalho(leitor.fieldnames)
+        conteudo_csv = ler_conteudo_csv(lote)
+        leitor = csv.DictReader(io.StringIO(conteudo_csv))
+        try:
+            parser.validar_cabecalho(leitor.fieldnames)
+        except ValueError as erro_cabecalho:
+            raise ErroEstruturalArquivoCsv(str(erro_cabecalho)) from erro_cabecalho
 
         for indice, linha_csv in enumerate(leitor, start=1):
             resultado.linhas_total += 1
@@ -89,10 +106,12 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                 resultado.linhas_importadas += 1
             except Exception as erro_linha:  # noqa: BLE001
                 resultado.linhas_puladas += 1
-                resultado.erros.append(f"Linha {indice}: {erro_linha}")
+                resultado.erros_por_linha.append(f"Linha {indice}: {erro_linha}")
 
-    except Exception as erro_geral:  # noqa: BLE001
-        resultado.erros.append(f"Falha ao ler arquivo CSV: {erro_geral}")
+    except ErroEstruturalArquivoCsv as erro_estrutural:
+        resultado.erros_estruturais.append(str(erro_estrutural))
+    except Exception as erro_fatal:  # noqa: BLE001
+        resultado.erros_fatais.append(f"Erro fatal inesperado: {erro_fatal}")
 
     atualizar_status_lote(lote, resultado)
     return resultado
@@ -108,28 +127,50 @@ def atualizar_status_lote(lote: ImportBatch, resultado: ResultadoImportacao) -> 
     lote.imported_rows = resultado.linhas_importadas
     lote.duplicated_rows = resultado.linhas_duplicadas
 
-    if resultado.erros and resultado.linhas_importadas == 0:
+    houve_erro_estrutural = bool(resultado.erros_estruturais)
+    houve_erro_fatal = bool(resultado.erros_fatais)
+    houve_erro_linha = bool(resultado.erros_por_linha)
+
+    if houve_erro_estrutural or houve_erro_fatal:
         lote.status = ImportBatch.Status.FAILED
-    elif resultado.linhas_importadas == 0 and resultado.linhas_total > 0:
+    elif resultado.linhas_importadas == 0:
         lote.status = ImportBatch.Status.FAILED
-    elif resultado.linhas_puladas > 0:
+    elif resultado.linhas_puladas > 0 or houve_erro_linha:
         lote.status = ImportBatch.Status.PARTIAL
     else:
         lote.status = ImportBatch.Status.PROCESSED
 
-    lote.error_log = "\n".join(resultado.erros or [])
+    lote.error_log = montar_error_log(resultado)
     lote.save()
 
 
-def normalizar_texto(texto: str) -> str:
-    texto_limpo = unicodedata.normalize("NFKD", texto or "")
-    texto_limpo = "".join(char for char in texto_limpo if not unicodedata.combining(char))
-    texto_limpo = " ".join(texto_limpo.lower().split())
-    return texto_limpo
+def ler_conteudo_csv(lote: ImportBatch) -> str:
+    """Lê o CSV do lote com tratamento simples de encoding e ponteiro."""
+
+    lote.file.open("rb")
+    try:
+        if hasattr(lote.file, "seek"):
+            lote.file.seek(0)
+        dados_brutos = lote.file.read()
+    finally:
+        lote.file.close()
+
+    for encoding in ("utf-8-sig", "latin-1", "iso-8859-1"):
+        try:
+            return dados_brutos.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ErroEstruturalArquivoCsv(
+        "Não foi possível decodificar o arquivo CSV com os encodings suportados."
+    )
 
 
-def extrair_merchant(descricao_normalizada: str) -> str:
-    return " ".join(descricao_normalizada.split()[:3]).strip() or "indefinido"
+def montar_error_log(resultado: ResultadoImportacao) -> str:
+    linhas_erro: list[str] = []
+    linhas_erro.extend(f"[estrutural] {erro}" for erro in resultado.erros_estruturais)
+    linhas_erro.extend(f"[linha] {erro}" for erro in resultado.erros_por_linha)
+    linhas_erro.extend(f"[fatal] {erro}" for erro in resultado.erros_fatais)
+    return "\n".join(linhas_erro)
 
 
 def gerar_raw_hash(account_id: int, data_transacao: str, valor: str, descricao_norm: str) -> str:
