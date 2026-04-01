@@ -1,5 +1,6 @@
 """Admin do app imports."""
 
+from django import forms
 from django.contrib import admin
 from django.contrib import messages
 from django.db import transaction
@@ -8,8 +9,23 @@ from .models import ImportBatch
 from .services.import_service import executar_importacao_import_batch
 
 
+class FormularioImportBatchAdmin(forms.ModelForm):
+    """Valida requisitos mínimos de criação do lote de importação."""
+
+    class Meta:
+        model = ImportBatch
+        fields = "__all__"
+
+    def clean(self):
+        dados_limpos = super().clean()
+        if not self.instance.pk and not dados_limpos.get("file"):
+            raise forms.ValidationError("É obrigatório anexar um arquivo CSV para criar o lote.")
+        return dados_limpos
+
+
 @admin.register(ImportBatch)
 class ImportBatchAdmin(admin.ModelAdmin):
+    form = FormularioImportBatchAdmin
     list_display = (
         "id",
         "account",
@@ -66,12 +82,12 @@ class ImportBatchAdmin(admin.ModelAdmin):
 
         def executar_pipeline():
             resultado = executar_importacao_import_batch(obj.id)
-            mensagens = (
+            mensagem = (
                 f"Importação finalizada: total={resultado.linhas_total}, "
                 f"importadas={resultado.linhas_importadas}, puladas={resultado.linhas_puladas}."
             )
             if resultado.erros:
-                mensagens += " Verifique o campo error_log para detalhes."
-            messages.add_message(request, messages.INFO, mensagens)
+                mensagem += " Verifique o campo error_log para detalhes."
+            messages.add_message(request, messages.INFO, mensagem)
 
         transaction.on_commit(executar_pipeline)

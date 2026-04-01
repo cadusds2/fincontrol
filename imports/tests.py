@@ -6,7 +6,6 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from accounts.models import Account
-from classification.models import ReviewQueue
 from imports.models import ImportBatch
 from imports.services.import_service import executar_importacao_import_batch
 from transactions.models import Transaction
@@ -46,15 +45,13 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado_2.linhas_duplicadas, 1)
         self.assertEqual(Transaction.objects.count(), 1)
 
-    def test_cria_review_queue_quando_nao_classifica(self) -> None:
-        csv_sem_match = "date,title,amount\n2026-03-11,Despesa totalmente nova,-25.00\n"
-        lote = self.criar_lote(csv_sem_match)
+    def test_falha_quando_cabecalho_ausente(self) -> None:
+        csv_invalido = "data,descricao,valor\n2026-03-11,Despesa totalmente nova,-25.00\n"
+        lote = self.criar_lote(csv_invalido)
 
-        executar_importacao_import_batch(lote.id)
+        resultado = executar_importacao_import_batch(lote.id)
+        lote.refresh_from_db()
 
-        transacao = Transaction.objects.get()
-        self.assertEqual(
-            transacao.classification_source,
-            Transaction.ClassificationSource.UNCLASSIFIED,
-        )
-        self.assertTrue(ReviewQueue.objects.filter(transaction=transacao).exists())
+        self.assertEqual(resultado.linhas_importadas, 0)
+        self.assertEqual(lote.status, ImportBatch.Status.FAILED)
+        self.assertIn("Colunas obrigatórias ausentes", lote.error_log)

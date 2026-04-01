@@ -1,4 +1,4 @@
-"""Utilitários base para parsers de CSV do app imports."""
+"""Contrato e utilitários base para parsers de CSV do app imports."""
 
 from __future__ import annotations
 
@@ -17,6 +17,28 @@ class LinhaCanonica:
     direcao: str
     data_competencia: date | None = None
     moeda: str = "BRL"
+
+
+class ParserCsvBase:
+    """Contrato mínimo para parsers dedicados por tipo de arquivo no MVP."""
+
+    colunas_obrigatorias: tuple[str, ...] = ()
+
+    def validar_cabecalho(self, colunas: list[str] | None) -> None:
+        if not colunas:
+            raise ValueError("Arquivo CSV sem cabeçalho.")
+
+        colunas_presentes = {coluna.strip() for coluna in colunas if coluna}
+        colunas_faltantes = [
+            coluna for coluna in self.colunas_obrigatorias if coluna not in colunas_presentes
+        ]
+        if colunas_faltantes:
+            raise ValueError(
+                "Colunas obrigatórias ausentes: " + ", ".join(colunas_faltantes)
+            )
+
+    def interpretar_linha(self, linha_csv: dict[str, str]) -> LinhaCanonica:  # pragma: no cover
+        raise NotImplementedError
 
 
 def parse_data(valor: str) -> date:
