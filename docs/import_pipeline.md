@@ -24,8 +24,8 @@ Não há autodetecção no MVP.
 - Criar `ImportBatch` com status `received`.
 
 ### 2) Leitura e validação estrutural
-- Selecionar parser dedicado conforme `file_type`.
-- Validar colunas obrigatórias do layout.
+- Selecionar parser dedicado conforme `file_type` usando contrato único de parser.
+- Validar colunas obrigatórias do layout antes de processar as linhas.
 - Se falha estrutural total, finalizar `ImportBatch` como `failed`.
 
 ### 3) Transformação para formato canônico
@@ -55,7 +55,8 @@ Para cada linha válida:
   - `failed`: sem linhas importadas.
 
 ### 7) Disparo da classificação
-- Acionar pipeline de classificação para transações importadas no lote.
+- Nesta primeira versão funcional da importação, transações entram como `classification_source=unclassified`.
+- O disparo automático do pipeline completo será conectado na fase de classificação.
 
 ## Regras de parser no MVP
 
