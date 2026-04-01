@@ -32,9 +32,14 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 
 **Campos obrigatórios (MVP):**
 - `account_id` (FK `Account`)
+- `file` (upload do CSV original)
 - `file_type` (layout/banco explícito)
+- `reference_month`
 - `source_filename`
 - `status` (`received`, `processed`, `partial`, `failed`)
+- `rows_total`
+- `rows_imported`
+- `rows_skipped`
 - `total_rows`
 - `imported_rows`
 - `duplicated_rows`
