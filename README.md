@@ -75,3 +75,14 @@ Consulte o registro formal em [`docs/decisions.md`](docs/decisions.md).
 - Plano de implementação: [`docs/implementation_plan.md`](docs/implementation_plan.md)
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md)
 - Glossário: [`docs/glossary.md`](docs/glossary.md)
+
+## Seed inicial do MVP
+
+Para preparar o ambiente para validação manual do domínio:
+
+```bash
+python manage.py migrate
+python manage.py seed_inicial_mvp
+```
+
+O comando `seed_inicial_mvp` é idempotente: em execuções repetidas ele atualiza registros existentes sem criar duplicações de categorias e contas iniciais.
