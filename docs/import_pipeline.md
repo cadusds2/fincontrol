@@ -12,7 +12,8 @@ Importar CSV com rastreabilidade por lote, validação por parser dedicado e ded
    - extrato_conta_itau
    - fatura_cartao_itau
 2. `account_id` (seleção manual de conta/cartão já cadastrado)
-3. arquivo CSV
+3. `reference_month` (mês de referência do lote)
+4. arquivo CSV (`ImportBatch.file`)
 
 Não há autodetecção no MVP.
 
@@ -47,7 +48,7 @@ Para cada linha válida:
 - Iniciar com `classification_source=unclassified`.
 
 ### 6) Fechamento do lote
-- Atualizar `total_rows`, `imported_rows`, `duplicated_rows`.
+- Atualizar `rows_total`, `rows_imported`, `rows_skipped` e métricas legadas (`total_rows`, `imported_rows`, `duplicated_rows`).
 - Definir status final:
   - `processed`: sem erros relevantes;
   - `partial`: com linhas descartadas/erros parciais;

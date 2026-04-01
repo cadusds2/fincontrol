@@ -24,9 +24,22 @@ class ImportBatch(models.Model):
         on_delete=models.PROTECT,
         related_name="import_batches",
     )
+    file = models.FileField(upload_to="imports/csv/", blank=True)
     file_type = models.CharField(max_length=40, choices=FileType.choices)
-    source_filename = models.CharField(max_length=255)
-    status = models.CharField(max_length=20, choices=Status.choices)
+    reference_month = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Use o primeiro dia do mês de referência (ex.: 2026-04-01).",
+    )
+    source_filename = models.CharField(max_length=255, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RECEIVED,
+    )
+    rows_total = models.PositiveIntegerField(default=0)
+    rows_imported = models.PositiveIntegerField(default=0)
+    rows_skipped = models.PositiveIntegerField(default=0)
     total_rows = models.PositiveIntegerField(default=0)
     imported_rows = models.PositiveIntegerField(default=0)
     duplicated_rows = models.PositiveIntegerField(default=0)
@@ -40,3 +53,8 @@ class ImportBatch(models.Model):
 
     def __str__(self) -> str:
         return f"Lote {self.id} - {self.account.display_name} - {self.file_type}"
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.source_filename:
+            self.source_filename = self.file.name
+        return super().save(*args, **kwargs)
