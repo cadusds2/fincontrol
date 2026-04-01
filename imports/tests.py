@@ -55,3 +55,36 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado.linhas_importadas, 0)
         self.assertEqual(lote.status, ImportBatch.Status.FAILED)
         self.assertIn("Colunas obrigatórias ausentes", lote.error_log)
+
+    def test_importa_csv_com_fallback_latin_1(self) -> None:
+        csv_latin_1 = "date,title,amount\n2026-03-12,Padaria São José,-15.90\n"
+        lote = ImportBatch.objects.create(
+            account=self.conta,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            reference_month=date(2026, 4, 1),
+            source_filename="extrato_latin1.csv",
+        )
+        lote.file.save("extrato_latin1.csv", ContentFile(csv_latin_1.encode("latin-1")))
+        lote.save()
+
+        resultado = executar_importacao_import_batch(lote.id)
+        lote.refresh_from_db()
+
+        self.assertEqual(resultado.linhas_importadas, 1)
+        self.assertEqual(lote.status, ImportBatch.Status.PROCESSED)
+
+    def test_lote_parcial_em_erro_por_linha(self) -> None:
+        csv_parcial = (
+            "date,title,amount\n"
+            "2026-03-10,Cafe da esquina,-10.50\n"
+            "31-31-2026,Linha invalida,-20.00\n"
+        )
+        lote = self.criar_lote(csv_parcial)
+
+        resultado = executar_importacao_import_batch(lote.id)
+        lote.refresh_from_db()
+
+        self.assertEqual(resultado.linhas_importadas, 1)
+        self.assertEqual(resultado.linhas_puladas, 1)
+        self.assertEqual(lote.status, ImportBatch.Status.PARTIAL)
+        self.assertIn("[linha] Linha 2", lote.error_log)
