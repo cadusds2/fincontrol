@@ -29,6 +29,7 @@ class MerchantMapAdmin(admin.ModelAdmin):
     search_fields = ("merchant_norm", "category__name")
     autocomplete_fields = ("category",)
     list_select_related = ("category",)
+    list_editable = ("category", "source", "confidence")
     readonly_fields = ("created_at", "updated_at")
     ordering = ("merchant_norm",)
     list_per_page = 100
@@ -36,6 +37,7 @@ class MerchantMapAdmin(admin.ModelAdmin):
 
 @admin.register(ReviewQueue)
 class ReviewQueueAdmin(admin.ModelAdmin):
+    actions = ("marcar_como_ignorada",)
     list_display = (
         "transaction",
         "reason",
@@ -56,3 +58,7 @@ class ReviewQueueAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     ordering = ("-created_at",)
     list_per_page = 100
+
+    @admin.action(description="Marcar pendências selecionadas como ignoradas")
+    def marcar_como_ignorada(self, request, queryset):
+        queryset.filter(status=ReviewQueue.Status.PENDING).update(status=ReviewQueue.Status.IGNORED)

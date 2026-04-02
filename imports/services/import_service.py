@@ -13,6 +13,7 @@ from django.db import transaction
 from imports.models import ImportBatch
 from imports.parsers import MAPA_PARSERS
 from imports.services.normalization import normalizar_descricao_e_extrair_merchant
+from classification.services.classification_service import classificar_transacao
 from transactions.models import Transaction
 
 
@@ -90,7 +91,7 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                     continue
 
                 with transaction.atomic():
-                    Transaction.objects.create(
+                    transacao = Transaction.objects.create(
                         import_batch=lote,
                         account=lote.account,
                         transaction_date=linha_canonica.data_transacao,
@@ -105,6 +106,7 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                         raw_hash=raw_hash,
                         classification_source=Transaction.ClassificationSource.UNCLASSIFIED,
                     )
+                    classificar_transacao(transacao)
 
                 resultado.linhas_importadas += 1
             except Exception as erro_linha:  # noqa: BLE001
