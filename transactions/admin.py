@@ -28,6 +28,7 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = (
         "description_raw",
         "description_norm",
+        "merchant_raw",
         "merchant_norm",
         "raw_hash",
         "account__display_name",

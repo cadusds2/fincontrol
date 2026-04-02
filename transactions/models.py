@@ -31,6 +31,7 @@ class Transaction(models.Model):
     transaction_date = models.DateField()
     description_raw = models.TextField()
     description_norm = models.TextField()
+    merchant_raw = models.CharField(max_length=255, blank=True, default="")
     merchant_norm = models.CharField(max_length=255, db_index=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=3, default="BRL")
