@@ -15,6 +15,8 @@ class TransactionAdmin(admin.ModelAdmin):
         "direction",
         "category",
         "classification_source",
+        "classification_confidence",
+        "merchant_norm",
         "import_batch",
     )
     list_filter = (

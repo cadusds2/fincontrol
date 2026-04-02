@@ -13,6 +13,7 @@ from imports.services.normalization import (
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
 )
+from classification.models import Category, MerchantMap, ReviewQueue
 from transactions.models import Transaction
 
 
@@ -56,6 +57,7 @@ class ImportacaoCsvServiceTests(TestCase):
             transacao.classification_source,
             Transaction.ClassificationSource.UNCLASSIFIED,
         )
+        self.assertEqual(ReviewQueue.objects.filter(transaction=transacao).count(), 1)
         self.assertTrue(transacao.raw_hash)
 
     def test_importa_e_deduplica_transacoes_por_raw_hash(self) -> None:
@@ -121,6 +123,31 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado.linhas_puladas, 1)
         self.assertEqual(lote.status, ImportBatch.Status.PARTIAL)
         self.assertIn("[linha] Linha 2", lote.error_log)
+
+
+    def test_importacao_dispara_classificacao_por_merchant_map(self) -> None:
+        categoria = Category.objects.create(
+            name="Alimentação",
+            slug="alimentacao",
+            kind=Category.Kind.CONSUMO,
+            is_reportable=True,
+        )
+        MerchantMap.objects.create(
+            merchant_norm="cafe da esquina",
+            category=categoria,
+            source=MerchantMap.Source.SEED,
+        )
+
+        csv_valido = "date,title,amount\n2026-03-10,Cafe da esquina,-10.50\n"
+        lote = self.criar_lote(csv_valido)
+
+        resultado = executar_importacao_import_batch(lote.id)
+        transacao = Transaction.objects.get()
+
+        self.assertEqual(resultado.linhas_importadas, 1)
+        self.assertEqual(transacao.category, categoria)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MERCHANT_MAP)
+        self.assertEqual(ReviewQueue.objects.filter(transaction=transacao).count(), 0)
 
 
 class NormalizacaoImportacaoTests(TestCase):
