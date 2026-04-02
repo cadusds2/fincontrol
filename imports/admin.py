@@ -86,7 +86,7 @@ class ImportBatchAdmin(admin.ModelAdmin):
                 f"Importação finalizada: total={resultado.linhas_total}, "
                 f"importadas={resultado.linhas_importadas}, puladas={resultado.linhas_puladas}."
             )
-            if resultado.erros:
+            if resultado.total_erros:
                 mensagem += " Verifique o campo error_log para detalhes."
             messages.add_message(request, messages.INFO, mensagem)
 

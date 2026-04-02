@@ -30,6 +30,9 @@ Parser dedicado para um `file_type` específico, responsável por validar layout
 ## MerchantMap
 Tabela de mapeamento entre `merchant_norm` e categoria, usada para classificação automática com base no histórico do usuário.
 
+## merchant_raw
+Primeira extração determinística do estabelecimento preservando legibilidade para debugging.
+
 ## merchant_norm
 Representação normalizada do estabelecimento derivada da descrição da transação.
 

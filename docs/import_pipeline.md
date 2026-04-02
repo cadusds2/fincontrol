@@ -32,7 +32,7 @@ Não há autodetecção no MVP.
 Para cada linha válida:
 - mapear data, descrição, valor, moeda e direção;
 - preencher `description_raw`;
-- gerar `description_norm` e `merchant_norm`;
+- gerar `description_norm`, `merchant_raw` e `merchant_norm`;
 - mapear metadados de parcela quando existirem.
 
 ### 4) Deduplicação canônica (MVP)

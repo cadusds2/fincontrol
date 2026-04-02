@@ -80,6 +80,7 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 - `transaction_date`
 - `description_raw`
 - `description_norm`
+- `merchant_raw`
 - `merchant_norm`
 - `amount`
 - `currency` (padrão `BRL`)

@@ -6,12 +6,13 @@ import csv
 import hashlib
 import io
 from dataclasses import dataclass
+from decimal import Decimal
 
 from django.db import transaction
 
 from imports.models import ImportBatch
 from imports.parsers import MAPA_PARSERS
-from imports.services.normalization import extrair_merchant, normalizar_texto
+from imports.services.normalization import normalizar_descricao_e_extrair_merchant
 from transactions.models import Transaction
 
 
@@ -73,13 +74,14 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
             resultado.linhas_total += 1
             try:
                 linha_canonica = parser.interpretar_linha(linha_csv)
-                descricao_normalizada = normalizar_texto(linha_canonica.descricao_bruta)
-                merchant_normalizado = extrair_merchant(descricao_normalizada)
+                descricao_normalizada = normalizar_descricao_e_extrair_merchant(
+                    linha_canonica.descricao_bruta
+                )
                 raw_hash = gerar_raw_hash(
                     account_id=lote.account_id,
                     data_transacao=linha_canonica.data_transacao.isoformat(),
-                    valor=str(linha_canonica.valor),
-                    descricao_norm=descricao_normalizada,
+                    valor=linha_canonica.valor,
+                    descricao_norm=descricao_normalizada.description_norm,
                 )
 
                 if Transaction.objects.filter(account=lote.account, raw_hash=raw_hash).exists():
@@ -94,8 +96,9 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                         transaction_date=linha_canonica.data_transacao,
                         posted_date=linha_canonica.data_competencia,
                         description_raw=linha_canonica.descricao_bruta,
-                        description_norm=descricao_normalizada,
-                        merchant_norm=merchant_normalizado,
+                        description_norm=descricao_normalizada.description_norm,
+                        merchant_raw=descricao_normalizada.merchant_raw,
+                        merchant_norm=descricao_normalizada.merchant_norm,
                         amount=linha_canonica.valor,
                         currency=linha_canonica.moeda,
                         direction=linha_canonica.direcao,
@@ -133,6 +136,10 @@ def atualizar_status_lote(lote: ImportBatch, resultado: ResultadoImportacao) -> 
 
     if houve_erro_estrutural or houve_erro_fatal:
         lote.status = ImportBatch.Status.FAILED
+    elif resultado.linhas_total == 0:
+        lote.status = ImportBatch.Status.FAILED
+    elif resultado.linhas_importadas == 0 and resultado.linhas_duplicadas == resultado.linhas_total:
+        lote.status = ImportBatch.Status.PARTIAL
     elif resultado.linhas_importadas == 0:
         lote.status = ImportBatch.Status.FAILED
     elif resultado.linhas_puladas > 0 or houve_erro_linha:
@@ -173,6 +180,7 @@ def montar_error_log(resultado: ResultadoImportacao) -> str:
     return "\n".join(linhas_erro)
 
 
-def gerar_raw_hash(account_id: int, data_transacao: str, valor: str, descricao_norm: str) -> str:
-    carga = f"{account_id}|{data_transacao}|{valor}|{descricao_norm}"
+def gerar_raw_hash(account_id: int, data_transacao: str, valor: Decimal, descricao_norm: str) -> str:
+    valor_normalizado = f"{valor:.2f}"
+    carga = f"{account_id}|{data_transacao}|{valor_normalizado}|{descricao_norm}"
     return hashlib.sha256(carga.encode("utf-8")).hexdigest()
