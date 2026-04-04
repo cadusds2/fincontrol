@@ -1,8 +1,31 @@
 """Admin do app transactions."""
 
 from django.contrib import admin
+from django.db.models import QuerySet
 
 from .models import Transaction
+
+
+class FiltroStatusClassificacao(admin.SimpleListFilter):
+    title = "status de classificação"
+    parameter_name = "status_classificacao"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("classificadas", "Classificadas"),
+            ("nao_classificadas", "Não classificadas"),
+            ("manuais", "Classificação manual"),
+        )
+
+    def queryset(self, request, queryset: QuerySet[Transaction]):
+        valor = self.value()
+        if valor == "classificadas":
+            return queryset.exclude(category__isnull=True)
+        if valor == "nao_classificadas":
+            return queryset.filter(category__isnull=True)
+        if valor == "manuais":
+            return queryset.filter(classification_source=Transaction.ClassificationSource.MANUAL)
+        return queryset
 
 
 @admin.register(Transaction)
@@ -20,6 +43,7 @@ class TransactionAdmin(admin.ModelAdmin):
         "import_batch",
     )
     list_filter = (
+        FiltroStatusClassificacao,
         "direction",
         "classification_source",
         "currency",
