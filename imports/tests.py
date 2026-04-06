@@ -26,10 +26,14 @@ class ImportacaoCsvServiceTests(TestCase):
             display_name="Conta principal",
         )
 
-    def criar_lote(self, conteudo_csv: str) -> ImportBatch:
+    def criar_lote(
+        self,
+        conteudo_csv: str,
+        file_type: str = ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+    ) -> ImportBatch:
         lote = ImportBatch.objects.create(
             account=self.conta,
-            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            file_type=file_type,
             reference_month=date(2026, 4, 1),
             source_filename="extrato.csv",
         )
@@ -67,17 +71,23 @@ class ImportacaoCsvServiceTests(TestCase):
 
     def test_importa_e_deduplica_transacoes_por_raw_hash(self) -> None:
         csv_valido = (
-            "Data,Valor,Descrição\n"
-            "10/03/2026,-10.50,Cafe da esquina\n"
+            "data_lancamento,descricao,valor\n"
+            "10/03/2026,Cafe da esquina,-10.50\n"
         )
-        lote_1 = self.criar_lote(csv_valido)
+        lote_1 = self.criar_lote(
+            csv_valido,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_ITAU,
+        )
 
         resultado_1 = executar_importacao_import_batch(lote_1.id)
 
         self.assertEqual(resultado_1.linhas_importadas, 1)
         self.assertEqual(Transaction.objects.count(), 1)
 
-        lote_2 = self.criar_lote(csv_valido)
+        lote_2 = self.criar_lote(
+            csv_valido,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_ITAU,
+        )
         resultado_2 = executar_importacao_import_batch(lote_2.id)
         lote_2.refresh_from_db()
 
@@ -122,6 +132,24 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado_2.linhas_importadas, 0)
         self.assertEqual(resultado_2.linhas_duplicadas, 1)
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_linha_sem_identificador_no_nubank_conta_rejeitada_sem_duplicidade(self) -> None:
+        csv_invalido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/03/2026,-10.50,   ,Cafe da esquina\n"
+        )
+        lote = self.criar_lote(csv_invalido)
+
+        resultado = executar_importacao_import_batch(lote.id)
+        lote.refresh_from_db()
+
+        self.assertEqual(resultado.linhas_total, 1)
+        self.assertEqual(resultado.linhas_importadas, 0)
+        self.assertEqual(resultado.linhas_puladas, 1)
+        self.assertEqual(resultado.linhas_duplicadas, 0)
+        self.assertEqual(lote.status, ImportBatch.Status.FAILED)
+        self.assertIn("Linha 1: Identificador obrigatório ausente ou vazio", lote.error_log)
+        self.assertEqual(Transaction.objects.count(), 0)
 
     def test_falha_quando_cabecalho_ausente(self) -> None:
         csv_invalido = "data,descricao,valor\n2026-03-11,Despesa totalmente nova,-25.00\n"
@@ -255,3 +283,17 @@ class ParserNubankContaTests(TestCase):
         self.assertEqual(linha.direcao, "debit")
         self.assertEqual(linha.descricao_bruta, "Pagamento de fatura")
         self.assertEqual(linha.external_id, "67eec87e-b9f2-4538-a9b2-29c95bf166c2")
+
+    def test_rejeita_linha_com_identificador_vazio(self) -> None:
+        with self.assertRaisesMessage(
+            ValueError,
+            "Identificador obrigatório ausente ou vazio no layout Nubank conta.",
+        ):
+            self.parser.interpretar_linha(
+                {
+                    "Data": "03/04/2025",
+                    "Valor": "-79.00",
+                    "Identificador": "   ",
+                    "Descrição": "Pagamento de fatura",
+                }
+            )

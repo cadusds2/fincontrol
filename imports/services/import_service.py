@@ -88,6 +88,7 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
 
                 if transacao_ja_importada(
                     account_id=lote.account_id,
+                    file_type=lote.file_type,
                     external_id=external_id,
                     raw_hash=raw_hash,
                 ):
@@ -201,8 +202,18 @@ def normalizar_external_id(external_id: str | None) -> str | None:
     return texto or None
 
 
-def transacao_ja_importada(account_id: int, external_id: str | None, raw_hash: str) -> bool:
+def transacao_ja_importada(
+    account_id: int,
+    file_type: str,
+    external_id: str | None,
+    raw_hash: str,
+) -> bool:
     """Aplica regra de deduplicação priorizando identificador externo confiável."""
+
+    if file_type == ImportBatch.FileType.EXTRATO_CONTA_NUBANK:
+        if not external_id:
+            return False
+        return Transaction.objects.filter(account_id=account_id, external_id=external_id).exists()
 
     if external_id:
         return Transaction.objects.filter(account_id=account_id, external_id=external_id).exists()
