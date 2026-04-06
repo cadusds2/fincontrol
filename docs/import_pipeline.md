@@ -39,6 +39,10 @@ Para cada linha válida:
 - Calcular `raw_hash` sobre campos normalizados.
 - Fórmula de referência do MVP:
   - `raw_hash = sha256(account_id + transaction_date + amount + description_norm)`
+- Regra específica do layout `extrato_conta_nubank`:
+  - `Identificador` é obrigatório por linha.
+  - A chave primária de deduplicação é `account_id + external_id`.
+  - Nesse layout, não há fallback para `account_id + raw_hash` quando `external_id` estiver ausente ou vazio; a linha deve ser rejeitada no parser.
 - Regra de prioridade:
   1. quando houver identificador externo confiável (`external_id`), deduplicar por `account_id + external_id`;
   2. quando não houver `external_id`, deduplicar por `account_id + raw_hash`.

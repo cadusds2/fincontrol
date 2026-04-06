@@ -6,7 +6,7 @@ from .base import ParserCsvBase, LinhaCanonica, inferir_direcao_por_valor, parse
 
 
 class ParserNubankConta(ParserCsvBase):
-    colunas_obrigatorias = ("Data", "Valor", "Descrição")
+    colunas_obrigatorias = ("Data", "Valor", "Descrição", "Identificador")
 
     def interpretar_linha(self, linha_csv: dict[str, str]) -> LinhaCanonica:
         data = parse_data(
@@ -25,11 +25,14 @@ class ParserNubankConta(ParserCsvBase):
             "identifier",
             "id",
         )
+        external_id = (identificador_externo or "").strip()
+        if not external_id:
+            raise ValueError("Identificador obrigatório ausente ou vazio no layout Nubank conta.")
         direcao = inferir_direcao_por_valor(valor)
         return LinhaCanonica(
             data_transacao=data,
             descricao_bruta=descricao,
             valor=abs(valor),
             direcao=direcao,
-            external_id=(identificador_externo or "").strip() or None,
+            external_id=external_id,
         )
