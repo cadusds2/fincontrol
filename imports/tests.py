@@ -11,6 +11,7 @@ from imports.parsers.nubank_account import ParserNubankConta
 from imports.services.import_service import executar_importacao_import_batch
 from imports.services.normalization import (
     extrair_merchant,
+    extrair_merchant_transferencia_ou_pix,
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
 )
@@ -304,6 +305,27 @@ class NormalizacaoImportacaoTests(TestCase):
         self.assertEqual(descricao.description_norm, "pix restaurante sabor & arte")
         self.assertEqual(descricao.merchant_raw, "restaurante sabor & arte")
         self.assertEqual(descricao.merchant_norm, "restaurante sabor & arte")
+
+    def test_extrai_nome_em_transferencia_recebida_pelo_pix(self) -> None:
+        merchant = extrair_merchant_transferencia_ou_pix(
+            "transferencia recebida pelo pix - maria da silva - cpf ***.***.***-** banco 260"
+        )
+
+        self.assertEqual(merchant, ("maria da silva", "maria da silva"))
+
+    def test_extrai_nome_em_pix_com_lixo_bancario(self) -> None:
+        merchant_raw, merchant_norm = extrair_merchant(
+            "pix enviado - joao pedro - banco 341 ag 0001 conta 12345-6"
+        )
+
+        self.assertEqual(merchant_raw, "joao pedro")
+        self.assertEqual(merchant_norm, "joao pedro")
+
+    def test_fallback_indefinido_quando_nao_ha_nome_util_em_transferencia(self) -> None:
+        merchant_raw, merchant_norm = extrair_merchant("pix recebido - banco 260 - ag 0001")
+
+        self.assertEqual(merchant_raw, "indefinido")
+        self.assertEqual(merchant_norm, "indefinido")
 
 
 class ParserNubankContaTests(TestCase):
