@@ -73,3 +73,7 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 ## D-018 — Deduplicação obrigatória por identificador no extrato Nubank conta
 - **Decisão:** para o layout `extrato_conta_nubank`, o campo `Identificador` é obrigatório e a deduplicação ocorre por `account_id + external_id + raw_hash`, sem fallback por `account_id + raw_hash` quando o identificador não existir (linha inválida no parser).
 - **Motivo:** o layout já oferece identificador externo confiável por lançamento; torná-lo obrigatório reduz ambiguidade e evita aceitar linhas inválidas sem chave de idempotência adequada.
+
+## D-019 — Aliases explícitos do titular para transferência interna
+- **Decisão:** adicionar configuração explícita `CLASSIFICACAO_ALIASES_TITULAR` por ambiente (com suporte por conta via `external_ref` ou `account_id`) para detectar `Transferência Interna` por match forte com `merchant_norm`.
+- **Motivo:** separar com mais precisão transferências entre contas próprias versus transferências para terceiros, mantendo rastreabilidade em `classification_source=rule` e sem quebrar taxonomia técnica do MVP.

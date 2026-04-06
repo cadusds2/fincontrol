@@ -10,10 +10,11 @@
 ## Pipeline oficial (ordem obrigatória)
 
 1. **Normalização**
-2. **MerchantMap**
-3. **Regras YAML**
-4. **Similaridade fuzzy**
-5. **ReviewQueue**
+2. **Regra técnica de aliases do titular (transferência interna)**
+3. **MerchantMap**
+4. **Regras YAML**
+5. **Similaridade fuzzy**
+6. **ReviewQueue**
 
 ## Por que MerchantMap vem antes das regras YAML
 
@@ -28,22 +29,27 @@
 - Gerar `description_norm` e `merchant_norm` a partir de `description_raw`.
 - Aplicar normalizações estáveis (casefold, remoção de ruído textual e espaços redundantes).
 
-### 2) MerchantMap
+### 2) Regra técnica de aliases do titular (transferência interna)
+- Comparar `merchant_norm` com aliases conhecidos do titular em configuração explícita por ambiente/conta.
+- Em match forte, classificar como `Transferência Interna` (`Category.kind=tecnica`, `Category.is_reportable=false`).
+- Registrar `classification_source=rule`.
+
+### 3) MerchantMap
 - Buscar `merchant_norm` no mapa.
 - Em caso de match, atribuir categoria diretamente.
 - Registrar `classification_source=merchant_map`.
 
-### 3) Regras YAML
+### 4) Regras YAML
 - Avaliar regras declarativas por prioridade.
 - Primeira regra válida vence.
 - Registrar `classification_source=rule`.
 
-### 4) Similaridade fuzzy
+### 5) Similaridade fuzzy
 - Comparar `merchant_norm` com base conhecida.
 - Aplicar categoria apenas se score >= limiar definido em configuração.
 - Registrar `classification_source=similarity`.
 
-### 5) ReviewQueue
+### 6) ReviewQueue
 - Se nenhuma etapa anterior produzir classificação confiável, criar item pendente.
 - Registrar `classification_source=unclassified` até decisão humana.
 
