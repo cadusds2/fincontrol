@@ -9,6 +9,20 @@ from dataclasses import dataclass
 PADRAO_RUIDO = re.compile(r"\b(?:compra\s+no\s+credito|debito|credito|pix|cp\s+\d+)\b")
 PADRAO_ESPACOS = re.compile(r"\s+")
 PADRAO_NAO_ALFANUMERICO = re.compile(r"[^\w\s/&.-]")
+PADRAO_CPF_CNPJ_MASCARADO = re.compile(
+    r"\b(?:\d{3}\.?\*{3}\.?\*{3}-?\d{2}|\*{3}\.?\*{3}\.?\*{3}-?\*{2})\b"
+)
+PADRAO_TERMO_BANCARIO = re.compile(r"\b(?:banco|ag(?:encia)?|conta|cc)\b")
+PADRAO_NUMERO_ISOLADO = re.compile(r"\b[\d.*./-]+\b")
+PADRAO_TRANSFERENCIA_PIX = re.compile(r"\b(?:transferencia|pix)\b")
+TERMOS_INVALIDOS_NOME_TRANSFERENCIA = {
+    "pix",
+    "transferencia",
+    "transferencia recebida pelo pix",
+    "transferencia enviada pelo pix",
+    "recebida",
+    "enviada",
+}
 
 
 @dataclass(frozen=True)
@@ -38,8 +52,46 @@ def remover_ruido_textual(texto_normalizado: str) -> str:
     return PADRAO_ESPACOS.sub(" ", sem_ruido).strip()
 
 
+def _limpar_trecho_nome_transferencia_ou_pix(trecho: str) -> str:
+    """Remove lixo comum do trecho de nome em transferência/Pix."""
+
+    trecho_limpo = PADRAO_CPF_CNPJ_MASCARADO.sub(" ", trecho)
+    trecho_limpo = PADRAO_TERMO_BANCARIO.sub(" ", trecho_limpo)
+    trecho_limpo = PADRAO_NUMERO_ISOLADO.sub(" ", trecho_limpo)
+    trecho_limpo = PADRAO_ESPACOS.sub(" ", trecho_limpo).strip(" -")
+    return trecho_limpo
+
+
+def extrair_merchant_transferencia_ou_pix(descricao_normalizada: str) -> tuple[str, str] | None:
+    """Extrai nome de pessoa em descrições de transferência/Pix com separadores."""
+
+    if not descricao_normalizada or not PADRAO_TRANSFERENCIA_PIX.search(descricao_normalizada):
+        return None
+
+    partes = [parte.strip() for parte in descricao_normalizada.split("-") if parte.strip()]
+    if len(partes) < 2:
+        return None
+
+    for trecho in partes[1:]:
+        nome_limpo = _limpar_trecho_nome_transferencia_ou_pix(trecho)
+        nome_normalizado = normalizar_texto(nome_limpo)
+        if not nome_normalizado or nome_normalizado in TERMOS_INVALIDOS_NOME_TRANSFERENCIA:
+            continue
+        if not any(caractere.isalpha() for caractere in nome_normalizado):
+            continue
+        return nome_limpo, nome_normalizado
+
+    return None
+
+
 def extrair_merchant(descricao_normalizada: str) -> tuple[str, str]:
     """Extrai merchant bruto e normalizado por regra determinística simples."""
+
+    merchant_transferencia_ou_pix = extrair_merchant_transferencia_ou_pix(descricao_normalizada)
+    if merchant_transferencia_ou_pix is not None:
+        return merchant_transferencia_ou_pix
+    if PADRAO_TRANSFERENCIA_PIX.search(descricao_normalizada) and "-" in descricao_normalizada:
+        return "indefinido", "indefinido"
 
     descricao_sem_ruido = remover_ruido_textual(descricao_normalizada)
     if not descricao_sem_ruido:
