@@ -24,18 +24,38 @@ class ParserCsvBase:
 
     colunas_obrigatorias: tuple[str, ...] = ()
 
+    @staticmethod
+    def normalizar_nome_coluna(coluna: str) -> str:
+        return (coluna or "").strip().lower()
+
     def validar_cabecalho(self, colunas: list[str] | None) -> None:
         if not colunas:
             raise ValueError("Arquivo CSV sem cabeçalho.")
 
-        colunas_presentes = {coluna.strip() for coluna in colunas if coluna}
+        colunas_presentes = {
+            self.normalizar_nome_coluna(coluna)
+            for coluna in colunas
+            if self.normalizar_nome_coluna(coluna)
+        }
         colunas_faltantes = [
-            coluna for coluna in self.colunas_obrigatorias if coluna not in colunas_presentes
+            coluna
+            for coluna in self.colunas_obrigatorias
+            if self.normalizar_nome_coluna(coluna) not in colunas_presentes
         ]
         if colunas_faltantes:
             raise ValueError(
                 "Colunas obrigatórias ausentes: " + ", ".join(colunas_faltantes)
             )
+
+    def obter_valor_coluna(self, linha_csv: dict[str, str], *alternativas: str) -> str | None:
+        mapa_normalizado = {
+            self.normalizar_nome_coluna(chave): valor for chave, valor in (linha_csv or {}).items()
+        }
+        for alternativa in alternativas:
+            valor = mapa_normalizado.get(self.normalizar_nome_coluna(alternativa))
+            if valor not in (None, ""):
+                return valor
+        return None
 
     def interpretar_linha(self, linha_csv: dict[str, str]) -> LinhaCanonica:  # pragma: no cover
         raise NotImplementedError
