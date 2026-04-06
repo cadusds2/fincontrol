@@ -41,12 +41,12 @@ Para cada linha válida:
   - `raw_hash = sha256(account_id + transaction_date + amount + description_norm)`
 - Regra específica do layout `extrato_conta_nubank`:
   - `Identificador` é obrigatório por linha.
-  - A chave primária de deduplicação é `account_id + external_id`.
+  - A chave primária de deduplicação é `account_id + external_id + raw_hash`.
   - Nesse layout, não há fallback para `account_id + raw_hash` quando `external_id` estiver ausente ou vazio; a linha deve ser rejeitada no parser.
 - Regra de prioridade:
-  1. quando houver identificador externo confiável (`external_id`), deduplicar por `account_id + external_id`;
+  1. quando houver identificador externo confiável (`external_id`), deduplicar por `account_id + external_id + raw_hash`;
   2. quando não houver `external_id`, deduplicar por `account_id + raw_hash`.
-- Escopos de unicidade no MVP: `account_id + external_id` (quando preenchido) e `account_id + raw_hash`.
+- Escopos de unicidade no MVP: `account_id + external_id + raw_hash` (quando preenchido) e `account_id + raw_hash`.
 - Se já existir transação com a chave de deduplicação aplicável, tratar como duplicata.
 - Duplicata não é persistida e incrementa `ImportBatch.duplicated_rows`.
 

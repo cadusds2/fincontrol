@@ -38,7 +38,7 @@ Pessoa física com Nubank e/ou Itaú, com múltiplas contas/cartões e necessida
 
 - Cadastro de múltiplas contas/cartões por banco.
 - Importação com `ImportBatch` e rastreabilidade.
-- Deduplicação priorizando `external_id` (`account_id + external_id`) quando disponível, com fallback por `raw_hash` canônico (`account_id + raw_hash`).
+- Deduplicação priorizando `external_id` + `raw_hash` (`account_id + external_id + raw_hash`) quando disponível, com fallback por `raw_hash` canônico (`account_id + raw_hash`).
 - Classificação: normalização → MerchantMap → regras YAML → similaridade → ReviewQueue.
 - Revisão manual com aprendizado incremental em `MerchantMap`.
 - Relatórios considerando apenas categorias reportáveis (`Category.is_reportable=true`).

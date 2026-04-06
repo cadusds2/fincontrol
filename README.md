@@ -47,7 +47,7 @@ Pagamento de Fatura, Transferência Interna, Movimentação de Investimentos.
 
 - Categorias técnicas não entram no relatório principal de consumo.
 - Parcelamento no cartão segue **cash basis** no MVP.
-- Deduplicação de transação priorizando `external_id` (`account_id + external_id`) quando disponível, com fallback no hash canônico (`raw_hash`) com escopo `account_id + raw_hash`.
+- Deduplicação de transação priorizando `external_id` combinado ao hash canônico (`account_id + external_id + raw_hash`) quando disponível, com fallback no hash canônico (`account_id + raw_hash`).
 
 Consulte o registro formal em [`docs/decisions.md`](docs/decisions.md).
 
