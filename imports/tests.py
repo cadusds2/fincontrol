@@ -7,6 +7,7 @@ from django.test import TestCase
 
 from accounts.models import Account
 from imports.models import ImportBatch
+from imports.parsers.nubank_account import ParserNubankConta
 from imports.services.import_service import executar_importacao_import_batch
 from imports.services.normalization import (
     extrair_merchant,
@@ -37,7 +38,10 @@ class ImportacaoCsvServiceTests(TestCase):
         return lote
 
     def test_importacao_basica_preenche_campos_canonicos(self) -> None:
-        csv_valido = "date,title,amount\n2026-03-10,  Compra no crédito   Café São José 123  ,-10.50\n"
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/03/2026,-10.50,abc123,  Compra no crédito   Café São José 123  \n"
+        )
         lote = self.criar_lote(csv_valido)
 
         resultado = executar_importacao_import_batch(lote.id)
@@ -61,7 +65,10 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertTrue(transacao.raw_hash)
 
     def test_importa_e_deduplica_transacoes_por_raw_hash(self) -> None:
-        csv_valido = "date,title,amount\n2026-03-10,Cafe da esquina,-10.50\n"
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/03/2026,-10.50,abc123,Cafe da esquina\n"
+        )
         lote_1 = self.criar_lote(csv_valido)
 
         resultado_1 = executar_importacao_import_batch(lote_1.id)
@@ -92,7 +99,10 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertIn("Colunas obrigatórias ausentes", lote.error_log)
 
     def test_importa_csv_com_fallback_latin_1(self) -> None:
-        csv_latin_1 = "date,title,amount\n2026-03-12,Padaria São José,-15.90\n"
+        csv_latin_1 = (
+            "Data,Valor,Identificador,Descrição\n"
+            "12/03/2026,-15.90,abc123,Padaria São José\n"
+        )
         lote = ImportBatch.objects.create(
             account=self.conta,
             file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
@@ -110,9 +120,9 @@ class ImportacaoCsvServiceTests(TestCase):
 
     def test_lote_parcial_em_erro_por_linha(self) -> None:
         csv_parcial = (
-            "date,title,amount\n"
-            "2026-03-10,Cafe da esquina,-10.50\n"
-            "31-31-2026,Linha invalida,-20.00\n"
+            "Data,Valor,Identificador,Descrição\n"
+            "10/03/2026,-10.50,abc123,Cafe da esquina\n"
+            "31-31-2026,-20.00,abc124,Linha invalida\n"
         )
         lote = self.criar_lote(csv_parcial)
 
@@ -138,7 +148,10 @@ class ImportacaoCsvServiceTests(TestCase):
             source=MerchantMap.Source.SEED,
         )
 
-        csv_valido = "date,title,amount\n2026-03-10,Cafe da esquina,-10.50\n"
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/03/2026,-10.50,abc123,Cafe da esquina\n"
+        )
         lote = self.criar_lote(csv_valido)
 
         resultado = executar_importacao_import_batch(lote.id)
@@ -166,3 +179,41 @@ class NormalizacaoImportacaoTests(TestCase):
         self.assertEqual(descricao.description_norm, "pix restaurante sabor & arte")
         self.assertEqual(descricao.merchant_raw, "restaurante sabor & arte")
         self.assertEqual(descricao.merchant_norm, "restaurante sabor & arte")
+
+
+class ParserNubankContaTests(TestCase):
+    def setUp(self) -> None:
+        self.parser = ParserNubankConta()
+
+    def test_valida_cabecalho_real_nubank_conta(self) -> None:
+        self.parser.validar_cabecalho(["Data", "Valor", "Identificador", "Descrição"])
+
+    def test_interpreta_linha_valor_positivo_como_credito(self) -> None:
+        linha = self.parser.interpretar_linha(
+            {
+                "Data": "03/04/2025",
+                "Valor": "60.00",
+                "Identificador": "67eec84c-43f3-45b8-893c-c164d40b645e",
+                "Descrição": "Transferência recebida pelo Pix - CARLOS",
+            }
+        )
+
+        self.assertEqual(linha.data_transacao, date(2025, 4, 3))
+        self.assertEqual(linha.valor, 60)
+        self.assertEqual(linha.direcao, "credit")
+        self.assertEqual(linha.descricao_bruta, "Transferência recebida pelo Pix - CARLOS")
+
+    def test_interpreta_linha_valor_negativo_como_debito(self) -> None:
+        linha = self.parser.interpretar_linha(
+            {
+                "Data": "03/04/2025",
+                "Valor": "-79.00",
+                "Identificador": "67eec87e-b9f2-4538-a9b2-29c95bf166c2",
+                "Descrição": "Pagamento de fatura",
+            }
+        )
+
+        self.assertEqual(linha.data_transacao, date(2025, 4, 3))
+        self.assertEqual(linha.valor, 79)
+        self.assertEqual(linha.direcao, "debit")
+        self.assertEqual(linha.descricao_bruta, "Pagamento de fatura")

@@ -6,12 +6,19 @@ from .base import ParserCsvBase, LinhaCanonica, inferir_direcao_por_valor, parse
 
 
 class ParserNubankConta(ParserCsvBase):
-    colunas_obrigatorias = ("date", "title", "amount")
+    colunas_obrigatorias = ("Data", "Valor", "Descrição")
 
     def interpretar_linha(self, linha_csv: dict[str, str]) -> LinhaCanonica:
-        data = parse_data(linha_csv.get("date") or linha_csv.get("data"))
-        descricao = (linha_csv.get("title") or linha_csv.get("descricao") or "").strip()
-        valor = parse_decimal(linha_csv.get("amount") or linha_csv.get("valor"))
+        data = parse_data(
+            self.obter_valor_coluna(linha_csv, "Data", "date", "data")
+        )
+        descricao = (
+            self.obter_valor_coluna(linha_csv, "Descrição", "Descricao", "title", "descricao")
+            or ""
+        ).strip()
+        valor = parse_decimal(
+            self.obter_valor_coluna(linha_csv, "Valor", "amount", "valor")
+        )
         direcao = inferir_direcao_por_valor(valor)
         return LinhaCanonica(
             data_transacao=data,
