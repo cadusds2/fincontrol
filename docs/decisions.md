@@ -59,8 +59,8 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 - **Motivo:** garantir idempotência prática sem heurísticas temporais frágeis.
 
 ## D-015 — Composição do raw_hash
-- **Decisão:** calcular `raw_hash = sha256(account_id + transaction_date + amount + description_norm)` após normalização canônica.
-- **Motivo:** criar assinatura estável por lançamento para impedir duplicações acidentais.
+- **Decisão:** calcular `raw_hash = sha256(account_id + transaction_date + amount + description_norm + direction)` após normalização canônica.
+- **Motivo:** criar assinatura estável por lançamento para impedir duplicações acidentais, distinguindo movimentos de mesma data/valor/descrição com direções opostas.
 
 ## D-016 — Parsers dedicados por tipo de arquivo
 - **Decisão:** manter parser específico para cada `file_type` suportado no MVP.

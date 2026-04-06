@@ -38,7 +38,7 @@ Para cada linha válida:
 ### 4) Deduplicação canônica (MVP)
 - Calcular `raw_hash` sobre campos normalizados.
 - Fórmula de referência do MVP:
-  - `raw_hash = sha256(account_id + transaction_date + amount + description_norm)`
+  - `raw_hash = sha256(account_id + transaction_date + amount + description_norm + direction)`
 - Regra específica do layout `extrato_conta_nubank`:
   - `Identificador` é obrigatório por linha.
   - A chave primária de deduplicação é `account_id + external_id + raw_hash`.

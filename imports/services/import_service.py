@@ -83,6 +83,7 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                     data_transacao=linha_canonica.data_transacao.isoformat(),
                     valor=linha_canonica.valor,
                     descricao_norm=descricao_normalizada.description_norm,
+                    direcao=linha_canonica.direcao,
                 )
                 external_id = normalizar_external_id(linha_canonica.external_id)
 
@@ -189,9 +190,15 @@ def montar_error_log(resultado: ResultadoImportacao) -> str:
     return "\n".join(linhas_erro)
 
 
-def gerar_raw_hash(account_id: int, data_transacao: str, valor: Decimal, descricao_norm: str) -> str:
+def gerar_raw_hash(
+    account_id: int,
+    data_transacao: str,
+    valor: Decimal,
+    descricao_norm: str,
+    direcao: str,
+) -> str:
     valor_normalizado = f"{valor:.2f}"
-    carga = f"{account_id}|{data_transacao}|{valor_normalizado}|{descricao_norm}"
+    carga = f"{account_id}|{data_transacao}|{valor_normalizado}|{descricao_norm}|{direcao}"
     return hashlib.sha256(carga.encode("utf-8")).hexdigest()
 
 
