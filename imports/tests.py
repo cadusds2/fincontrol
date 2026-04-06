@@ -62,12 +62,13 @@ class ImportacaoCsvServiceTests(TestCase):
             Transaction.ClassificationSource.UNCLASSIFIED,
         )
         self.assertEqual(ReviewQueue.objects.filter(transaction=transacao).count(), 1)
+        self.assertEqual(transacao.external_id, "abc123")
         self.assertTrue(transacao.raw_hash)
 
     def test_importa_e_deduplica_transacoes_por_raw_hash(self) -> None:
         csv_valido = (
-            "Data,Valor,Identificador,Descrição\n"
-            "10/03/2026,-10.50,abc123,Cafe da esquina\n"
+            "Data,Valor,Descrição\n"
+            "10/03/2026,-10.50,Cafe da esquina\n"
         )
         lote_1 = self.criar_lote(csv_valido)
 
@@ -85,6 +86,41 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado_2.linhas_puladas, 1)
         self.assertEqual(resultado_2.linhas_duplicadas, 1)
         self.assertEqual(lote_2.status, ImportBatch.Status.PARTIAL)
+        self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_importa_duas_transacoes_iguais_com_external_id_diferente(self) -> None:
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/01/2025,-28.00,id_1,Compra no débito - Casa do Nando\n"
+            "10/01/2025,-28.00,id_2,Compra no débito - Casa do Nando\n"
+        )
+        lote = self.criar_lote(csv_valido)
+
+        resultado = executar_importacao_import_batch(lote.id)
+
+        self.assertEqual(resultado.linhas_total, 2)
+        self.assertEqual(resultado.linhas_importadas, 2)
+        self.assertEqual(resultado.linhas_duplicadas, 0)
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertSetEqual(
+            set(Transaction.objects.values_list("external_id", flat=True)),
+            {"id_1", "id_2"},
+        )
+
+    def test_nao_duplica_quando_external_id_ja_existir(self) -> None:
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/01/2025,-28.00,id_1,Compra no débito - Casa do Nando\n"
+        )
+        lote_1 = self.criar_lote(csv_valido)
+        resultado_1 = executar_importacao_import_batch(lote_1.id)
+        self.assertEqual(resultado_1.linhas_importadas, 1)
+
+        lote_2 = self.criar_lote(csv_valido)
+        resultado_2 = executar_importacao_import_batch(lote_2.id)
+
+        self.assertEqual(resultado_2.linhas_importadas, 0)
+        self.assertEqual(resultado_2.linhas_duplicadas, 1)
         self.assertEqual(Transaction.objects.count(), 1)
 
     def test_falha_quando_cabecalho_ausente(self) -> None:
@@ -202,6 +238,7 @@ class ParserNubankContaTests(TestCase):
         self.assertEqual(linha.valor, 60)
         self.assertEqual(linha.direcao, "credit")
         self.assertEqual(linha.descricao_bruta, "Transferência recebida pelo Pix - CARLOS")
+        self.assertEqual(linha.external_id, "67eec84c-43f3-45b8-893c-c164d40b645e")
 
     def test_interpreta_linha_valor_negativo_como_debito(self) -> None:
         linha = self.parser.interpretar_linha(
@@ -217,3 +254,4 @@ class ParserNubankContaTests(TestCase):
         self.assertEqual(linha.valor, 79)
         self.assertEqual(linha.direcao, "debit")
         self.assertEqual(linha.descricao_bruta, "Pagamento de fatura")
+        self.assertEqual(linha.external_id, "67eec87e-b9f2-4538-a9b2-29c95bf166c2")

@@ -84,8 +84,13 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                     valor=linha_canonica.valor,
                     descricao_norm=descricao_normalizada.description_norm,
                 )
+                external_id = normalizar_external_id(linha_canonica.external_id)
 
-                if Transaction.objects.filter(account=lote.account, raw_hash=raw_hash).exists():
+                if transacao_ja_importada(
+                    account_id=lote.account_id,
+                    external_id=external_id,
+                    raw_hash=raw_hash,
+                ):
                     resultado.linhas_duplicadas += 1
                     resultado.linhas_puladas += 1
                     continue
@@ -103,6 +108,7 @@ def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportaca
                         amount=linha_canonica.valor,
                         currency=linha_canonica.moeda,
                         direction=linha_canonica.direcao,
+                        external_id=external_id,
                         raw_hash=raw_hash,
                         classification_source=Transaction.ClassificationSource.UNCLASSIFIED,
                     )
@@ -186,3 +192,18 @@ def gerar_raw_hash(account_id: int, data_transacao: str, valor: Decimal, descric
     valor_normalizado = f"{valor:.2f}"
     carga = f"{account_id}|{data_transacao}|{valor_normalizado}|{descricao_norm}"
     return hashlib.sha256(carga.encode("utf-8")).hexdigest()
+
+
+def normalizar_external_id(external_id: str | None) -> str | None:
+    """Normaliza identificador externo para uso canônico de deduplicação."""
+
+    texto = (external_id or "").strip()
+    return texto or None
+
+
+def transacao_ja_importada(account_id: int, external_id: str | None, raw_hash: str) -> bool:
+    """Aplica regra de deduplicação priorizando identificador externo confiável."""
+
+    if external_id:
+        return Transaction.objects.filter(account_id=account_id, external_id=external_id).exists()
+    return Transaction.objects.filter(account_id=account_id, raw_hash=raw_hash).exists()

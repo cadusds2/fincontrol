@@ -19,10 +19,17 @@ class ParserNubankConta(ParserCsvBase):
         valor = parse_decimal(
             self.obter_valor_coluna(linha_csv, "Valor", "amount", "valor")
         )
+        identificador_externo = self.obter_valor_coluna(
+            linha_csv,
+            "Identificador",
+            "identifier",
+            "id",
+        )
         direcao = inferir_direcao_por_valor(valor)
         return LinhaCanonica(
             data_transacao=data,
             descricao_bruta=descricao,
             valor=abs(valor),
             direcao=direcao,
+            external_id=(identificador_externo or "").strip() or None,
         )

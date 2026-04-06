@@ -36,6 +36,7 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=3, default="BRL")
     direction = models.CharField(max_length=10, choices=Direction.choices)
+    external_id = models.CharField(max_length=255, null=True, blank=True)
     raw_hash = models.CharField(max_length=64)
     classification_source = models.CharField(
         max_length=20,
@@ -70,8 +71,14 @@ class Transaction(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["account", "raw_hash"],
+                condition=models.Q(external_id__isnull=True),
                 name="uniq_transaction_account_raw_hash",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["account", "external_id"],
+                condition=models.Q(external_id__isnull=False),
+                name="uniq_transaction_account_external_id",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -65,3 +65,7 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 ## D-016 — Parsers dedicados por tipo de arquivo
 - **Decisão:** manter parser específico para cada `file_type` suportado no MVP.
 - **Motivo:** tornar validação e manutenção previsíveis quando layouts mudarem.
+
+## D-017 — Prioridade de deduplicação com identificador externo
+- **Decisão:** quando o arquivo fornecer identificador externo confiável por transação, deduplicar por `account_id + external_id`; na ausência desse identificador, manter fallback por `account_id + raw_hash`.
+- **Motivo:** evitar falsos positivos em transações distintas com mesma data, valor e descrição normalizada, preservando idempotência para layouts sem identificador externo.

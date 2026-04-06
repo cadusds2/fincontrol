@@ -15,6 +15,7 @@ class LinhaCanonica:
     descricao_bruta: str
     valor: Decimal
     direcao: str
+    external_id: str | None = None
     data_competencia: date | None = None
     moeda: str = "BRL"
 
