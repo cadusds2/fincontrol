@@ -100,7 +100,7 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 
 **Regras obrigatórias (MVP):**
 - unicidade por `account_id + raw_hash`.
-- quando `external_id` existir, unicidade adicional por `account_id + external_id`.
+- quando `external_id` existir, unicidade adicional por `account_id + external_id + raw_hash`.
 - `classification_source=unclassified` na criação, antes do pipeline de classificação.
 
 ## 5) MerchantMap

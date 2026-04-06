@@ -75,9 +75,9 @@ class Transaction(models.Model):
                 name="uniq_transaction_account_raw_hash",
             ),
             models.UniqueConstraint(
-                fields=["account", "external_id"],
+                fields=["account", "external_id", "raw_hash"],
                 condition=models.Q(external_id__isnull=False),
-                name="uniq_transaction_account_external_id",
+                name="uniq_transaction_account_external_id_raw_hash",
             ),
         ]
 

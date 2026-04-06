@@ -14,7 +14,7 @@ Arquitetura monolítica em Django com separação por apps e serviços internos:
 - `accounts`
   - cadastro e manutenção de `Account`.
 - `imports`
-  - upload manual, `ImportBatch`, parsers e deduplicação (`external_id` quando disponível, fallback `raw_hash`).
+  - upload manual, `ImportBatch`, parsers e deduplicação (`external_id + raw_hash` quando disponível, fallback `raw_hash`).
 - `transactions`
   - persistência e consulta de `Transaction`.
 - `classification`
@@ -28,7 +28,7 @@ Arquitetura monolítica em Django com separação por apps e serviços internos:
 1. Usuário seleciona `file_type`, `account_id` e CSV.
 2. Sistema cria `ImportBatch`.
 3. Parser dedicado transforma linhas para formato canônico.
-4. Deduplicação prioriza `account_id + external_id` quando disponível, com fallback para `account_id + raw_hash`.
+4. Deduplicação prioriza `account_id + external_id + raw_hash` quando disponível, com fallback para `account_id + raw_hash`.
 5. Transações válidas são persistidas e lote é finalizado.
 
 ### 2) Classificação

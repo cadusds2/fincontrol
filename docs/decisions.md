@@ -67,9 +67,9 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 - **Motivo:** tornar validação e manutenção previsíveis quando layouts mudarem.
 
 ## D-017 — Prioridade de deduplicação com identificador externo
-- **Decisão:** quando o arquivo fornecer identificador externo confiável por transação, deduplicar por `account_id + external_id`; na ausência desse identificador, manter fallback por `account_id + raw_hash`.
-- **Motivo:** evitar falsos positivos em transações distintas com mesma data, valor e descrição normalizada, preservando idempotência para layouts sem identificador externo.
+- **Decisão:** quando o arquivo fornecer identificador externo confiável por transação, deduplicar por `account_id + external_id + raw_hash`; na ausência desse identificador, manter fallback por `account_id + raw_hash`.
+- **Motivo:** permitir lançamentos legítimos com mesmo `external_id` e conteúdo canônico diferente (casos reais de pares +/-), sem abrir mão da idempotência.
 
 ## D-018 — Deduplicação obrigatória por identificador no extrato Nubank conta
-- **Decisão:** para o layout `extrato_conta_nubank`, o campo `Identificador` é obrigatório e a chave primária de deduplicação é `account_id + external_id`, sem fallback por `account_id + raw_hash`.
+- **Decisão:** para o layout `extrato_conta_nubank`, o campo `Identificador` é obrigatório e a deduplicação ocorre por `account_id + external_id + raw_hash`, sem fallback por `account_id + raw_hash` quando o identificador não existir (linha inválida no parser).
 - **Motivo:** o layout já oferece identificador externo confiável por lançamento; torná-lo obrigatório reduz ambiguidade e evita aceitar linhas inválidas sem chave de idempotência adequada.

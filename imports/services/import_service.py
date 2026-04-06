@@ -208,13 +208,21 @@ def transacao_ja_importada(
     external_id: str | None,
     raw_hash: str,
 ) -> bool:
-    """Aplica regra de deduplicação priorizando identificador externo confiável."""
+    """Aplica regra de deduplicação por external_id + conteúdo canônico."""
 
     if file_type == ImportBatch.FileType.EXTRATO_CONTA_NUBANK:
         if not external_id:
             return False
-        return Transaction.objects.filter(account_id=account_id, external_id=external_id).exists()
+        return Transaction.objects.filter(
+            account_id=account_id,
+            external_id=external_id,
+            raw_hash=raw_hash,
+        ).exists()
 
     if external_id:
-        return Transaction.objects.filter(account_id=account_id, external_id=external_id).exists()
+        return Transaction.objects.filter(
+            account_id=account_id,
+            external_id=external_id,
+            raw_hash=raw_hash,
+        ).exists()
     return Transaction.objects.filter(account_id=account_id, raw_hash=raw_hash).exists()

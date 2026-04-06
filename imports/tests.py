@@ -117,7 +117,7 @@ class ImportacaoCsvServiceTests(TestCase):
             {"id_1", "id_2"},
         )
 
-    def test_nao_duplica_quando_external_id_ja_existir(self) -> None:
+    def test_nao_duplica_quando_external_id_e_raw_hash_ja_existirem(self) -> None:
         csv_valido = (
             "Data,Valor,Identificador,Descrição\n"
             "10/01/2025,-28.00,id_1,Compra no débito - Casa do Nando\n"
@@ -132,6 +132,43 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(resultado_2.linhas_importadas, 0)
         self.assertEqual(resultado_2.linhas_duplicadas, 1)
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_importa_pares_de_mesmo_external_id_com_raw_hash_diferente(self) -> None:
+        csv_valido = (
+            "Data,Valor,Identificador,Descrição\n"
+            "03/04/2025,-79.00,67eec87e-b9f2-4538-a9b2-29c95bf166c2,Pagamento de fatura\n"
+            "03/04/2025,79.00,67eec87e-b9f2-4538-a9b2-29c95bf166c2,Estorno pagamento de fatura\n"
+            "03/04/2025,-60.00,67eec84c-43f3-45b8-893c-c164d40b645e,Transferência enviada pelo Pix - CARLOS\n"
+            "03/04/2025,60.00,67eec84c-43f3-45b8-893c-c164d40b645e,Transferência recebida pelo Pix - CARLOS\n"
+            "03/04/2025,-15.90,abc123-def456-ghi789-jkl000,Compra no débito - Padaria São José\n"
+            "03/04/2025,15.90,abc123-def456-ghi789-jkl000,Estorno compra no débito - Padaria São José\n"
+        )
+        lote = self.criar_lote(csv_valido)
+
+        resultado = executar_importacao_import_batch(lote.id)
+        transacoes = Transaction.objects.order_by("external_id", "id")
+
+        self.assertEqual(resultado.linhas_total, 6)
+        self.assertEqual(resultado.linhas_importadas, 6)
+        self.assertEqual(resultado.linhas_duplicadas, 0)
+        self.assertEqual(transacoes.count(), 6)
+        self.assertEqual(
+            transacoes.values("external_id").distinct().count(),
+            3,
+        )
+        self.assertEqual(
+            transacoes.filter(external_id="67eec87e-b9f2-4538-a9b2-29c95bf166c2").count(),
+            2,
+        )
+        self.assertEqual(
+            transacoes.filter(external_id="67eec84c-43f3-45b8-893c-c164d40b645e").count(),
+            2,
+        )
+        self.assertEqual(
+            transacoes.filter(external_id="abc123-def456-ghi789-jkl000").count(),
+            2,
+        )
+        self.assertEqual(transacoes.values("raw_hash").distinct().count(), 6)
 
     def test_linha_sem_identificador_no_nubank_conta_rejeitada_sem_duplicidade(self) -> None:
         csv_invalido = (
