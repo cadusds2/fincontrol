@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+import unicodedata
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from classification.models import MerchantMap, ReviewQueue
+from classification.models import Category, MerchantMap, ReviewQueue
 from classification.services.rules import aplicar_regras_deterministicas
 from transactions.models import Transaction
 
@@ -36,9 +38,18 @@ def classificar_transacao(transacao: Transaction) -> ResultadoClassificacao:
     with transaction.atomic():
         transacao = (
             Transaction.objects.select_for_update()
-            .select_related("category")
+            .select_related("category", "account")
             .get(pk=transacao.pk)
         )
+
+        categoria_transferencia_interna = _classificar_transferencia_interna_por_alias_titular(transacao)
+        if categoria_transferencia_interna is not None:
+            _resolver_revisao_pendente(transacao, "Classificação automática por alias de titular.")
+            return ResultadoClassificacao(
+                origem=Transaction.ClassificationSource.RULE,
+                categoria_id=categoria_transferencia_interna.id,
+                criou_revisao=False,
+            )
 
         resultado_merchant_map = _classificar_por_merchant_map(transacao)
         if resultado_merchant_map is not None:
@@ -71,6 +82,72 @@ def classificar_transacao(transacao: Transaction) -> ResultadoClassificacao:
             categoria_id=None,
             criou_revisao=criado,
         )
+
+
+def _classificar_transferencia_interna_por_alias_titular(transacao: Transaction) -> Category | None:
+    merchant = _normalizar_texto_simples((transacao.merchant_norm or "").strip())
+    if not merchant:
+        return None
+
+    aliases_titular = _obter_aliases_titular_da_conta(transacao)
+    if not aliases_titular:
+        return None
+
+    if not _ha_match_forte_alias_titular(merchant, aliases_titular):
+        return None
+
+    categoria_transferencia_interna = Category.objects.filter(
+        slug="transferencia-interna",
+        kind=Category.Kind.TECNICA,
+        is_reportable=False,
+        is_active=True,
+    ).first()
+    if categoria_transferencia_interna is None:
+        return None
+
+    _aplicar_classificacao(
+        transacao=transacao,
+        categoria_id=categoria_transferencia_interna.id,
+        origem=Transaction.ClassificationSource.RULE,
+        confianca=Decimal("0.98"),
+    )
+    return categoria_transferencia_interna
+
+
+def _obter_aliases_titular_da_conta(transacao: Transaction) -> set[str]:
+    configuracao = getattr(settings, "CLASSIFICACAO_ALIASES_TITULAR", {}) or {}
+    aliases_padrao = configuracao.get("padrao", [])
+    aliases_por_conta = configuracao.get("por_conta", {})
+
+    chave_conta = transacao.account.external_ref.strip() if transacao.account.external_ref else str(transacao.account_id)
+    aliases_conta = aliases_por_conta.get(chave_conta, [])
+
+    aliases_normalizados = {
+        _normalizar_texto_simples(alias)
+        for alias in [*aliases_padrao, *aliases_conta]
+        if _normalizar_texto_simples(alias)
+    }
+    return aliases_normalizados
+
+
+def _ha_match_forte_alias_titular(merchant: str, aliases_titular: set[str]) -> bool:
+    for alias in aliases_titular:
+        if merchant == alias:
+            return True
+
+        if len(alias) < 8 or len(merchant) < 8:
+            continue
+
+        if alias in merchant or merchant in alias:
+            return True
+
+    return False
+
+
+def _normalizar_texto_simples(texto: str) -> str:
+    texto_limpo = unicodedata.normalize("NFKD", texto or "")
+    texto_limpo = "".join(char for char in texto_limpo if not unicodedata.combining(char))
+    return " ".join(texto_limpo.casefold().split())
 
 
 def _classificar_por_merchant_map(transacao: Transaction):

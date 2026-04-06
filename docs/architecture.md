@@ -18,7 +18,7 @@ Arquitetura monolítica em Django com separação por apps e serviços internos:
 - `transactions`
   - persistência e consulta de `Transaction`.
 - `classification`
-  - normalização, `MerchantMap`, regras YAML, similaridade e `ReviewQueue`.
+  - normalização, regra técnica de alias do titular, `MerchantMap`, regras YAML, similaridade e `ReviewQueue`.
 - `reports`
   - relatórios de consumo e visão básica de `Budget`.
 
@@ -33,7 +33,7 @@ Arquitetura monolítica em Django com separação por apps e serviços internos:
 
 ### 2) Classificação
 1. Transações entram com `classification_source=unclassified`.
-2. Pipeline executa na ordem oficial: normalização → MerchantMap → regras YAML → similaridade.
+2. Pipeline executa na ordem oficial: normalização → alias do titular (transferência interna) → MerchantMap → regras YAML → similaridade.
 3. Sem confiança suficiente, criar item em `ReviewQueue`.
 
 ### 3) Revisão manual

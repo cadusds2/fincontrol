@@ -77,3 +77,16 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Configuração explícita de aliases do titular para detectar transferência interna.
+# Estrutura:
+# {
+#   "padrao": ["nome sobrenome"],
+#   "por_conta": {
+#       "<external_ref_ou_id_da_conta>": ["nome titular", "apelido titular"]
+#   }
+# }
+CLASSIFICACAO_ALIASES_TITULAR = {
+    "padrao": [],
+    "por_conta": {},
+}

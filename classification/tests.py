@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
+from django.test.utils import override_settings
 
 from accounts.models import Account
 from classification.models import Category, MerchantMap, ReviewQueue
@@ -97,6 +98,51 @@ class ClassificacaoMvpTests(TestCase):
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
         self.assertEqual(transacao.classification_confidence, Decimal("0.95"))
         self.assertFalse(ReviewQueue.objects.filter(transaction=transacao).exists())
+
+    @override_settings(
+        CLASSIFICACAO_ALIASES_TITULAR={
+            "padrao": ["joao da silva"],
+            "por_conta": {},
+        }
+    )
+    def test_classifica_transferencia_interna_por_alias_titular(self) -> None:
+        transacao = self.criar_transacao(
+            "pix enviado para joao da silva",
+            "joao da silva",
+        )
+
+        resultado = classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(resultado.origem, Transaction.ClassificationSource.RULE)
+        self.assertEqual(transacao.category, self.categoria_transferencia_interna)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
+        self.assertEqual(transacao.classification_confidence, Decimal("0.98"))
+        self.assertFalse(ReviewQueue.objects.filter(transaction=transacao).exists())
+
+    @override_settings(
+        CLASSIFICACAO_ALIASES_TITULAR={
+            "padrao": [],
+            "por_conta": {
+                "conta-principal": ["maria titular"],
+            },
+        }
+    )
+    def test_alias_titular_por_conta_nao_afeta_terceiros(self) -> None:
+        self.conta.external_ref = "conta-principal"
+        self.conta.save(update_fields=["external_ref", "updated_at"])
+        transacao = self.criar_transacao(
+            "pix enviado para ana terceiros",
+            "ana terceiros",
+        )
+
+        resultado = classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(resultado.origem, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertIsNone(transacao.category)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertEqual(ReviewQueue.objects.filter(transaction=transacao).count(), 1)
 
     def test_fallback_cria_review_queue_quando_sem_match(self) -> None:
         transacao = self.criar_transacao("compra completamente nova", "loja sem historico")
