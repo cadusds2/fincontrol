@@ -39,8 +39,11 @@ Para cada linha válida:
 - Calcular `raw_hash` sobre campos normalizados.
 - Fórmula de referência do MVP:
   - `raw_hash = sha256(account_id + transaction_date + amount + description_norm)`
-- Escopo de unicidade: `account_id + raw_hash`.
-- Se já existir transação com a mesma chave canônica, tratar como duplicata.
+- Regra de prioridade:
+  1. quando houver identificador externo confiável (`external_id`), deduplicar por `account_id + external_id`;
+  2. quando não houver `external_id`, deduplicar por `account_id + raw_hash`.
+- Escopos de unicidade no MVP: `account_id + external_id` (quando preenchido) e `account_id + raw_hash`.
+- Se já existir transação com a chave de deduplicação aplicável, tratar como duplicata.
 - Duplicata não é persistida e incrementa `ImportBatch.duplicated_rows`.
 
 ### 5) Persistência de transações

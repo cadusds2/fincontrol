@@ -85,6 +85,7 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 - `amount`
 - `currency` (padrão `BRL`)
 - `direction` (`debit`, `credit`)
+- `external_id` (identificador externo da transação quando fornecido pela origem)
 - `raw_hash`
 - `classification_source` (`merchant_map`, `rule`, `similarity`, `manual`, `unclassified`)
 
@@ -99,6 +100,7 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 
 **Regras obrigatórias (MVP):**
 - unicidade por `account_id + raw_hash`.
+- quando `external_id` existir, unicidade adicional por `account_id + external_id`.
 - `classification_source=unclassified` na criação, antes do pipeline de classificação.
 
 ## 5) MerchantMap
