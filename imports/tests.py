@@ -98,6 +98,30 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(lote_2.status, ImportBatch.Status.PARTIAL)
         self.assertEqual(Transaction.objects.count(), 1)
 
+    def test_importa_mesma_data_valor_e_descricao_com_direcoes_opostas(self) -> None:
+        csv_valido = (
+            "data_lancamento,descricao,valor\n"
+            "10/03/2026,Cafe da esquina,-10.50\n"
+            "10/03/2026,Cafe da esquina,10.50\n"
+        )
+        lote = self.criar_lote(
+            csv_valido,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_ITAU,
+        )
+
+        resultado = executar_importacao_import_batch(lote.id)
+        transacoes = Transaction.objects.order_by("id")
+
+        self.assertEqual(resultado.linhas_total, 2)
+        self.assertEqual(resultado.linhas_importadas, 2)
+        self.assertEqual(resultado.linhas_duplicadas, 0)
+        self.assertEqual(transacoes.count(), 2)
+        self.assertEqual(transacoes.values("raw_hash").distinct().count(), 2)
+        self.assertSetEqual(
+            set(transacoes.values_list("direction", flat=True)),
+            {"debit", "credit"},
+        )
+
     def test_importa_duas_transacoes_iguais_com_external_id_diferente(self) -> None:
         csv_valido = (
             "Data,Valor,Identificador,Descrição\n"
