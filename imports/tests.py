@@ -195,6 +195,22 @@ class ImportacaoCsvServiceTests(TestCase):
         )
         self.assertEqual(transacoes.values("raw_hash").distinct().count(), 6)
 
+    def test_reimportacao_pix_real_mantem_regra_de_deduplicacao_por_external_id_e_raw_hash(self) -> None:
+        csv_pix_real = (
+            "Data,Valor,Identificador,Descrição\n"
+            "03/04/2025,60.00,id_pix_real_001,Transferência recebida pelo Pix - Carlos Eduardo Santos da Silva - CPF ***.***.***-** - Banco 341 - Agência 0001 - Conta 12345-6\n"
+        )
+        lote_1 = self.criar_lote(csv_pix_real)
+        resultado_1 = executar_importacao_import_batch(lote_1.id)
+        self.assertEqual(resultado_1.linhas_importadas, 1)
+
+        lote_2 = self.criar_lote(csv_pix_real)
+        resultado_2 = executar_importacao_import_batch(lote_2.id)
+
+        self.assertEqual(resultado_2.linhas_importadas, 0)
+        self.assertEqual(resultado_2.linhas_duplicadas, 1)
+        self.assertEqual(Transaction.objects.count(), 1)
+
     def test_linha_sem_identificador_no_nubank_conta_rejeitada_sem_duplicidade(self) -> None:
         csv_invalido = (
             "Data,Valor,Identificador,Descrição\n"
@@ -326,6 +342,52 @@ class NormalizacaoImportacaoTests(TestCase):
 
         self.assertEqual(merchant_raw, "indefinido")
         self.assertEqual(merchant_norm, "indefinido")
+
+    def test_normalizar_descricao_com_nome_cpf_banco_agencia_conta_em_pix_recebido(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Transferência recebida pelo Pix - Carlos Eduardo Santos da Silva - CPF ***.***.***-** - Banco 341 - Agência 0001 - Conta 12345-6"
+        )
+
+        self.assertTrue(descricao.description_norm.startswith("transferencia recebida pelo pix - "))
+        self.assertIn("carlos eduardo santos da silva", descricao.description_norm)
+        self.assertIn("banco 341 - agencia 0001 - conta 12345-6", descricao.description_norm)
+        self.assertEqual(descricao.merchant_raw, "carlos eduardo santos da silva")
+        self.assertEqual(descricao.merchant_norm, "carlos eduardo santos da silva")
+        self.assertNotEqual(descricao.merchant_norm, "carlos eduardo santos da")
+
+    def test_normalizar_descricao_com_variacao_pix_recebido_de(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Pix recebido de - Carlos Eduardo Santos da Silva - CPF ***.***.***-** - Banco 260"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "carlos eduardo santos da silva")
+        self.assertEqual(descricao.merchant_norm, "carlos eduardo santos da silva")
+        self.assertNotEqual(descricao.merchant_norm, "carlos eduardo santos da")
+
+    def test_normalizar_descricao_com_variacao_transferencia_enviada_para(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Transferência enviada para - Carlos Eduardo Santos da Silva - CPF ***.***.***-** - Banco 033 - Agência 4321 - Conta 000987-0"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "carlos eduardo santos da silva")
+        self.assertEqual(descricao.merchant_norm, "carlos eduardo santos da silva")
+        self.assertNotEqual(descricao.merchant_norm, "carlos eduardo santos da")
+
+    def test_normalizar_descricao_fallback_indefinido_sem_nome_util(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Transferência recebida pelo Pix - Banco 260 - Agência 0001 - Conta 12345-6"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "indefinido")
+        self.assertEqual(descricao.merchant_norm, "indefinido")
+
+    def test_normalizar_descricao_fallback_indefinido_sem_contraparte_textual(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Transferência enviada para - Banco 033 - Agência 4321 - Conta 000987-0"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "indefinido")
+        self.assertEqual(descricao.merchant_norm, "indefinido")
 
 
 class ParserNubankContaTests(TestCase):
