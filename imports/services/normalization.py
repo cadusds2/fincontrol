@@ -30,6 +30,11 @@ PADRAO_TRANSFERENCIA_PIX = re.compile(r"\b(?:transferencia|pix)\b")
 PADRAO_COMPRA_DEBITO_CREDITO = re.compile(r"\b(?:compra|estorno\s+compra)\b.*\b(?:debito|credito)\b")
 PADRAO_ASSINATURA_GATEWAY = re.compile(r"\b(?:dm|mp|pagseguro|mercado\s*pago|picpay|stripe)\b")
 PADRAO_PREFIXO_GATEWAY = re.compile(r"^(?:dm|mp)\s*[*-]?\s*")
+PREFIXOS_CANAL_DESCARTAVEIS = ("via", "app", "site", "online", "checkout")
+EXCECOES_PREFIXO_CANAL = {
+    "app store",
+    "via varejo",
+}
 TERMOS_INVALIDOS_NOME_TRANSFERENCIA = {
     "pix",
     "transferencia",
@@ -79,6 +84,36 @@ def sanear_trecho_merchant(trecho: str) -> str:
     return trecho_saneado or "indefinido"
 
 
+def remover_prefixos_canal(trecho: str) -> str:
+    """Remove prefixos genéricos de canal no início do merchant."""
+
+    trecho_limpo = PADRAO_ESPACOS.sub(" ", (trecho or "")).strip(" -/")
+    if not trecho_limpo:
+        return "indefinido"
+
+    trecho_normalizado = normalizar_texto(trecho_limpo)
+    if trecho_normalizado in EXCECOES_PREFIXO_CANAL:
+        return trecho_limpo
+
+    tokens = trecho_limpo.split()
+    if len(tokens) <= 1:
+        return trecho_limpo
+
+    primeiro_token = normalizar_texto(tokens[0])
+    if primeiro_token not in PREFIXOS_CANAL_DESCARTAVEIS:
+        return trecho_limpo
+
+    candidato_sem_prefixo = " ".join(tokens[1:]).strip(" -/")
+    if not candidato_sem_prefixo:
+        return trecho_limpo
+
+    candidato_normalizado = normalizar_texto(candidato_sem_prefixo)
+    if not candidato_normalizado or candidato_normalizado in EXCECOES_PREFIXO_CANAL:
+        return trecho_limpo
+
+    return candidato_sem_prefixo
+
+
 def _limpar_trecho_nome_transferencia_ou_pix(trecho: str) -> str:
     """Remove lixo comum do trecho de nome em transferência/Pix."""
 
@@ -122,6 +157,7 @@ def extrair_merchant_compra_debito_credito(descricao_normalizada: str) -> tuple[
         return None
 
     merchant_raw = sanear_trecho_merchant(descricao_sem_ruido)
+    merchant_raw = remover_prefixos_canal(merchant_raw)
     merchant_norm = normalizar_texto(merchant_raw)
     if not merchant_norm:
         return None
@@ -140,6 +176,7 @@ def extrair_merchant_assinatura_gateway(descricao_normalizada: str) -> tuple[str
 
     merchant_raw = PADRAO_PREFIXO_GATEWAY.sub("", descricao_sem_ruido).strip(" -")
     merchant_raw = sanear_trecho_merchant(merchant_raw)
+    merchant_raw = remover_prefixos_canal(merchant_raw)
     merchant_norm = normalizar_texto(merchant_raw)
     if not merchant_norm:
         return None
@@ -166,6 +203,7 @@ def extrair_merchant_contextual(descricao_normalizada: str) -> tuple[str, str]:
 
     tokens = descricao_sem_ruido.split()
     merchant_raw = " ".join(tokens[:4]).strip() or "indefinido"
+    merchant_raw = remover_prefixos_canal(merchant_raw)
     merchant_norm = normalizar_texto(merchant_raw)
     return merchant_raw, merchant_norm or "indefinido"
 

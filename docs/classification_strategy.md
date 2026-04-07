@@ -28,6 +28,10 @@
 ### 1) Normalização
 - Gerar `description_norm` e `merchant_norm` a partir de `description_raw`.
 - Aplicar normalizações estáveis (casefold, remoção de ruído textual e espaços redundantes).
+- Na construção de `merchant_norm`, após o saneamento semântico e antes da normalização final, remover prefixos genéricos de canal no início do trecho com `remover_prefixos_canal(trecho)`.
+- Lista inicial de prefixos descartáveis: `via`, `app`, `site`, `online`, `checkout`.
+- Justificativa: esses prefixos aparecem como artefatos de canal de compra e pioram o match em `MerchantMap`, regras e similaridade quando mantidos no início.
+- Segurança contra falso positivo: manter lista explícita de exceções para nomes legítimos (ex.: `app store`, `via varejo`) e preservar o trecho original quando a remoção não for segura.
 
 ### 2) Regra técnica de aliases do titular (transferência interna)
 - Comparar `merchant_norm` com aliases conhecidos do titular em configuração explícita por ambiente/conta.
