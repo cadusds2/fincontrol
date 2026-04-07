@@ -15,9 +15,10 @@ from imports.services.normalization import (
     extrair_merchant_contextual,
     extrair_merchant,
     extrair_merchant_transferencia_pix,
-    sanear_trecho_merchant,
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
+    remover_prefixos_canal,
+    sanear_trecho_merchant,
 )
 from classification.models import Category, MerchantMap, ReviewQueue
 from transactions.models import Transaction
@@ -337,6 +338,16 @@ class NormalizacaoImportacaoTests(TestCase):
         merchant = extrair_merchant_compra_debito_credito("estorno compra no debito padaria sao jose")
 
         self.assertEqual(merchant, ("padaria sao jose", "padaria sao jose"))
+
+    def test_remove_prefixo_generico_de_canal_no_inicio(self) -> None:
+        trecho_limpo = remover_prefixos_canal("online mercado central")
+
+        self.assertEqual(trecho_limpo, "mercado central")
+
+    def test_nao_remove_prefixo_quando_nome_esta_na_lista_de_excecoes(self) -> None:
+        trecho_limpo = remover_prefixos_canal("app store")
+
+        self.assertEqual(trecho_limpo, "app store")
 
     def test_saneador_remove_blocos_bancarios_documento_e_numeros(self) -> None:
         trecho_saneado = sanear_trecho_merchant(
