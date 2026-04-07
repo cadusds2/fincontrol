@@ -15,6 +15,7 @@ from imports.services.normalization import (
     extrair_merchant_contextual,
     extrair_merchant,
     extrair_merchant_transferencia_pix,
+    sanear_trecho_merchant,
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
 )
@@ -63,8 +64,8 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(lote.status, ImportBatch.Status.PROCESSED)
         self.assertEqual(transacao.description_raw, "Compra no crédito   Café São José 123")
         self.assertEqual(transacao.description_norm, "compra no credito cafe sao jose 123")
-        self.assertEqual(transacao.merchant_raw, "cafe sao jose 123")
-        self.assertEqual(transacao.merchant_norm, "cafe sao jose 123")
+        self.assertEqual(transacao.merchant_raw, "cafe sao jose")
+        self.assertEqual(transacao.merchant_norm, "cafe sao jose")
         self.assertEqual(
             transacao.classification_source,
             Transaction.ClassificationSource.UNCLASSIFIED,
@@ -315,8 +316,8 @@ class NormalizacaoImportacaoTests(TestCase):
     def test_extracao_merchant_remove_ruido_inicial(self) -> None:
         merchant_raw, merchant_norm = extrair_merchant("compra no credito padaria vila mariana 457")
 
-        self.assertEqual(merchant_raw, "padaria vila mariana 457")
-        self.assertEqual(merchant_norm, "padaria vila mariana 457")
+        self.assertEqual(merchant_raw, "padaria vila mariana")
+        self.assertEqual(merchant_norm, "padaria vila mariana")
 
     def test_fluxo_unificado_de_normalizacao(self) -> None:
         descricao = normalizar_descricao_e_extrair_merchant("Pix   Restaurante Sabor & Arte")
@@ -336,6 +337,23 @@ class NormalizacaoImportacaoTests(TestCase):
         merchant = extrair_merchant_compra_debito_credito("estorno compra no debito padaria sao jose")
 
         self.assertEqual(merchant, ("padaria sao jose", "padaria sao jose"))
+
+    def test_saneador_remove_blocos_bancarios_documento_e_numeros(self) -> None:
+        trecho_saneado = sanear_trecho_merchant(
+            "Mercado Central (cod 123) cpf ***.***.***-** banco 341 agencia 0001 conta 12345-6"
+        )
+
+        self.assertEqual(trecho_saneado, "Mercado Central")
+
+    def test_saneador_preserva_conectores_uteis(self) -> None:
+        trecho_saneado = sanear_trecho_merchant("Casa & Video / Matriz - Centro")
+
+        self.assertEqual(trecho_saneado, "Casa & Video / Matriz - Centro")
+
+    def test_saneador_retorna_indefinido_quando_esvaziar(self) -> None:
+        trecho_saneado = sanear_trecho_merchant("cpf ***.***.***-** banco 260 agencia 0001 conta 1234")
+
+        self.assertEqual(trecho_saneado, "indefinido")
 
     def test_extrai_merchant_em_assinatura_gateway(self) -> None:
         merchant = extrair_merchant_assinatura_gateway("dm* spotify")

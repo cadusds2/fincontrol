@@ -12,10 +12,20 @@ PADRAO_RUIDO = re.compile(
 PADRAO_ESPACOS = re.compile(r"\s+")
 PADRAO_NAO_ALFANUMERICO = re.compile(r"[^\w\s/&.-]")
 PADRAO_CPF_CNPJ_MASCARADO = re.compile(
-    r"\b(?:\d{3}\.?\*{3}\.?\*{3}-?\d{2}|\*{3}\.?\*{3}\.?\*{3}-?\*{2})\b"
+    r"(?:\d{3}\.?\*{3}\.?\*{3}-?\d{2}|\*{3}\.?\*{3}\.?\*{3}-?\*{2})",
+    flags=re.IGNORECASE,
 )
 PADRAO_TERMO_BANCARIO = re.compile(r"\b(?:banco|ag(?:encia)?|conta|cc)\b")
 PADRAO_NUMERO_ISOLADO = re.compile(r"\b[\d.*./-]+\b")
+PADRAO_DOCUMENTO_ROTULADO = re.compile(
+    r"\b(?:cpf|cnpj)\s*[:.-]?\s*[\d*./-]+",
+    flags=re.IGNORECASE,
+)
+PADRAO_CODIGO_EM_PARENTESES = re.compile(r"\([^)]*\)")
+PADRAO_BLOCO_BANCARIO = re.compile(
+    r"(?:^|[\s-])(?:banco|ag(?:encia)?|conta|cc)\s*[:.-]?\s*[\w./-]*"
+)
+PADRAO_SEQUENCIA_NUMERICA_IRRELEVANTE = re.compile(r"\b\d+(?:[./-]\d+)*\b")
 PADRAO_TRANSFERENCIA_PIX = re.compile(r"\b(?:transferencia|pix)\b")
 PADRAO_COMPRA_DEBITO_CREDITO = re.compile(r"\b(?:compra|estorno\s+compra)\b.*\b(?:debito|credito)\b")
 PADRAO_ASSINATURA_GATEWAY = re.compile(r"\b(?:dm|mp|pagseguro|mercado\s*pago|picpay|stripe)\b")
@@ -57,10 +67,22 @@ def remover_ruido_textual(texto_normalizado: str) -> str:
     return PADRAO_ESPACOS.sub(" ", sem_ruido).strip()
 
 
+def sanear_trecho_merchant(trecho: str) -> str:
+    """Remove sufixos bancários e identificadores não comerciais de um trecho."""
+
+    trecho_saneado = PADRAO_CODIGO_EM_PARENTESES.sub(" ", trecho or "")
+    trecho_saneado = PADRAO_DOCUMENTO_ROTULADO.sub(" ", trecho_saneado)
+    trecho_saneado = PADRAO_CPF_CNPJ_MASCARADO.sub(" ", trecho_saneado)
+    trecho_saneado = PADRAO_BLOCO_BANCARIO.sub(" ", trecho_saneado)
+    trecho_saneado = PADRAO_SEQUENCIA_NUMERICA_IRRELEVANTE.sub(" ", trecho_saneado)
+    trecho_saneado = PADRAO_ESPACOS.sub(" ", trecho_saneado).strip(" -/")
+    return trecho_saneado or "indefinido"
+
+
 def _limpar_trecho_nome_transferencia_ou_pix(trecho: str) -> str:
     """Remove lixo comum do trecho de nome em transferência/Pix."""
 
-    trecho_limpo = PADRAO_CPF_CNPJ_MASCARADO.sub(" ", trecho)
+    trecho_limpo = sanear_trecho_merchant(trecho)
     trecho_limpo = PADRAO_TERMO_BANCARIO.sub(" ", trecho_limpo)
     trecho_limpo = PADRAO_NUMERO_ISOLADO.sub(" ", trecho_limpo)
     trecho_limpo = PADRAO_ESPACOS.sub(" ", trecho_limpo).strip(" -")
@@ -99,7 +121,7 @@ def extrair_merchant_compra_debito_credito(descricao_normalizada: str) -> tuple[
     if not descricao_sem_ruido:
         return None
 
-    merchant_raw = descricao_sem_ruido.strip()
+    merchant_raw = sanear_trecho_merchant(descricao_sem_ruido)
     merchant_norm = normalizar_texto(merchant_raw)
     if not merchant_norm:
         return None
@@ -117,6 +139,7 @@ def extrair_merchant_assinatura_gateway(descricao_normalizada: str) -> tuple[str
         return None
 
     merchant_raw = PADRAO_PREFIXO_GATEWAY.sub("", descricao_sem_ruido).strip(" -")
+    merchant_raw = sanear_trecho_merchant(merchant_raw)
     merchant_norm = normalizar_texto(merchant_raw)
     if not merchant_norm:
         return None
