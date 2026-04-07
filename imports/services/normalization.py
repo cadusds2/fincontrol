@@ -6,7 +6,9 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-PADRAO_RUIDO = re.compile(r"\b(?:compra\s+no\s+credito|debito|credito|pix|cp\s+\d+)\b")
+PADRAO_RUIDO = re.compile(
+    r"\b(?:estorno\s+compra\s+no\s+(?:credito|debito)|compra\s+no\s+(?:credito|debito)|debito|credito|pix|cp\s+\d+)\b"
+)
 PADRAO_ESPACOS = re.compile(r"\s+")
 PADRAO_NAO_ALFANUMERICO = re.compile(r"[^\w\s/&.-]")
 PADRAO_CPF_CNPJ_MASCARADO = re.compile(
@@ -15,6 +17,9 @@ PADRAO_CPF_CNPJ_MASCARADO = re.compile(
 PADRAO_TERMO_BANCARIO = re.compile(r"\b(?:banco|ag(?:encia)?|conta|cc)\b")
 PADRAO_NUMERO_ISOLADO = re.compile(r"\b[\d.*./-]+\b")
 PADRAO_TRANSFERENCIA_PIX = re.compile(r"\b(?:transferencia|pix)\b")
+PADRAO_COMPRA_DEBITO_CREDITO = re.compile(r"\b(?:compra|estorno\s+compra)\b.*\b(?:debito|credito)\b")
+PADRAO_ASSINATURA_GATEWAY = re.compile(r"\b(?:dm|mp|pagseguro|mercado\s*pago|picpay|stripe)\b")
+PADRAO_PREFIXO_GATEWAY = re.compile(r"^(?:dm|mp)\s*[*-]?\s*")
 TERMOS_INVALIDOS_NOME_TRANSFERENCIA = {
     "pix",
     "transferencia",
@@ -62,7 +67,7 @@ def _limpar_trecho_nome_transferencia_ou_pix(trecho: str) -> str:
     return trecho_limpo
 
 
-def extrair_merchant_transferencia_ou_pix(descricao_normalizada: str) -> tuple[str, str] | None:
+def extrair_merchant_transferencia_pix(descricao_normalizada: str) -> tuple[str, str] | None:
     """Extrai nome de pessoa em descrições de transferência/Pix com separadores."""
 
     if not descricao_normalizada or not PADRAO_TRANSFERENCIA_PIX.search(descricao_normalizada):
@@ -84,14 +89,53 @@ def extrair_merchant_transferencia_ou_pix(descricao_normalizada: str) -> tuple[s
     return None
 
 
-def extrair_merchant(descricao_normalizada: str) -> tuple[str, str]:
-    """Extrai merchant bruto e normalizado por regra determinística simples."""
+def extrair_merchant_compra_debito_credito(descricao_normalizada: str) -> tuple[str, str] | None:
+    """Extrai merchant de descrições de compra em débito/crédito."""
 
-    merchant_transferencia_ou_pix = extrair_merchant_transferencia_ou_pix(descricao_normalizada)
-    if merchant_transferencia_ou_pix is not None:
-        return merchant_transferencia_ou_pix
-    if PADRAO_TRANSFERENCIA_PIX.search(descricao_normalizada) and "-" in descricao_normalizada:
-        return "indefinido", "indefinido"
+    if not descricao_normalizada or not PADRAO_COMPRA_DEBITO_CREDITO.search(descricao_normalizada):
+        return None
+
+    descricao_sem_ruido = remover_ruido_textual(descricao_normalizada)
+    if not descricao_sem_ruido:
+        return None
+
+    merchant_raw = descricao_sem_ruido.strip()
+    merchant_norm = normalizar_texto(merchant_raw)
+    if not merchant_norm:
+        return None
+    return merchant_raw, merchant_norm
+
+
+def extrair_merchant_assinatura_gateway(descricao_normalizada: str) -> tuple[str, str] | None:
+    """Extrai merchant para descrições de assinatura mediadas por gateway."""
+
+    if not descricao_normalizada or not PADRAO_ASSINATURA_GATEWAY.search(descricao_normalizada):
+        return None
+
+    descricao_sem_ruido = remover_ruido_textual(descricao_normalizada)
+    if not descricao_sem_ruido:
+        return None
+
+    merchant_raw = PADRAO_PREFIXO_GATEWAY.sub("", descricao_sem_ruido).strip(" -")
+    merchant_norm = normalizar_texto(merchant_raw)
+    if not merchant_norm:
+        return None
+    return merchant_raw, merchant_norm
+
+
+def extrair_merchant_contextual(descricao_normalizada: str) -> tuple[str, str]:
+    """Orquestra cadeia de extratores especializados em ordem determinística."""
+
+    extratores = (
+        extrair_merchant_transferencia_pix,
+        extrair_merchant_compra_debito_credito,
+        extrair_merchant_assinatura_gateway,
+    )
+
+    for extrator in extratores:
+        merchant_extraido = extrator(descricao_normalizada)
+        if merchant_extraido is not None:
+            return merchant_extraido
 
     descricao_sem_ruido = remover_ruido_textual(descricao_normalizada)
     if not descricao_sem_ruido:
@@ -101,6 +145,16 @@ def extrair_merchant(descricao_normalizada: str) -> tuple[str, str]:
     merchant_raw = " ".join(tokens[:4]).strip() or "indefinido"
     merchant_norm = normalizar_texto(merchant_raw)
     return merchant_raw, merchant_norm or "indefinido"
+
+
+def extrair_merchant(descricao_normalizada: str) -> tuple[str, str]:
+    """Extrai merchant mantendo compatibilidade da API antiga."""
+
+    if PADRAO_TRANSFERENCIA_PIX.search(descricao_normalizada) and "-" in descricao_normalizada:
+        merchant_transferencia_pix = extrair_merchant_transferencia_pix(descricao_normalizada)
+        if merchant_transferencia_pix is None:
+            return "indefinido", "indefinido"
+    return extrair_merchant_contextual(descricao_normalizada)
 
 
 def normalizar_descricao_e_extrair_merchant(descricao_bruta: str) -> DescricaoNormalizada:

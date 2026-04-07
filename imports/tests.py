@@ -10,8 +10,11 @@ from imports.models import ImportBatch
 from imports.parsers.nubank_account import ParserNubankConta
 from imports.services.import_service import executar_importacao_import_batch
 from imports.services.normalization import (
+    extrair_merchant_assinatura_gateway,
+    extrair_merchant_compra_debito_credito,
+    extrair_merchant_contextual,
     extrair_merchant,
-    extrair_merchant_transferencia_ou_pix,
+    extrair_merchant_transferencia_pix,
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
 )
@@ -323,11 +326,26 @@ class NormalizacaoImportacaoTests(TestCase):
         self.assertEqual(descricao.merchant_norm, "restaurante sabor & arte")
 
     def test_extrai_nome_em_transferencia_recebida_pelo_pix(self) -> None:
-        merchant = extrair_merchant_transferencia_ou_pix(
+        merchant = extrair_merchant_transferencia_pix(
             "transferencia recebida pelo pix - maria da silva - cpf ***.***.***-** banco 260"
         )
 
         self.assertEqual(merchant, ("maria da silva", "maria da silva"))
+
+    def test_extrai_merchant_em_compra_debito_credito(self) -> None:
+        merchant = extrair_merchant_compra_debito_credito("estorno compra no debito padaria sao jose")
+
+        self.assertEqual(merchant, ("padaria sao jose", "padaria sao jose"))
+
+    def test_extrai_merchant_em_assinatura_gateway(self) -> None:
+        merchant = extrair_merchant_assinatura_gateway("dm* spotify")
+
+        self.assertEqual(merchant, ("spotify", "spotify"))
+
+    def test_orquestrador_respeita_ordem_de_extratores(self) -> None:
+        merchant = extrair_merchant_contextual("pix recebido - joao pedro - banco 341")
+
+        self.assertEqual(merchant, ("joao pedro", "joao pedro"))
 
     def test_extrai_nome_em_pix_com_lixo_bancario(self) -> None:
         merchant_raw, merchant_norm = extrair_merchant(
