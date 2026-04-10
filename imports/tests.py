@@ -436,6 +436,100 @@ class NormalizacaoImportacaoTests(TestCase):
         self.assertEqual(descricao.merchant_raw, "indefinido")
         self.assertEqual(descricao.merchant_norm, "indefinido")
 
+    def test_parametrizado_compra_debito_com_e_sem_via(self) -> None:
+        cenarios = [
+            (
+                "compra no debito via mercado central",
+                "mercado central",
+                "mercado central",
+            ),
+            (
+                "compra no debito mercado central",
+                "mercado central",
+                "mercado central",
+            ),
+        ]
+
+        for descricao, merchant_raw_esperado, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant_compra_debito_credito(descricao) or (
+                    "indefinido",
+                    "indefinido",
+                )
+                self.assertEqual(merchant_raw, merchant_raw_esperado)
+                self.assertEqual(merchant_norm, merchant_norm_esperado)
+
+    def test_parametrizado_pix_com_nome_cpf_e_dados_bancarios(self) -> None:
+        cenarios = [
+            (
+                "transferencia recebida pelo pix - ana paula souza - cpf ***.***.***-** - banco 341 - agencia 0001 - conta 12345-6",
+                "ana paula souza",
+                "ana paula souza",
+            ),
+            (
+                "transferencia enviada para - joao pedro lima - cpf ***.***.***-** - banco 260 - ag 1234 - conta 000111-2",
+                "joao pedro lima",
+                "joao pedro lima",
+            ),
+        ]
+
+        for descricao, merchant_raw_esperado, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant_transferencia_pix(descricao) or (
+                    "indefinido",
+                    "indefinido",
+                )
+                self.assertEqual(merchant_raw, merchant_raw_esperado)
+                self.assertEqual(merchant_norm, merchant_norm_esperado)
+
+    def test_parametrizado_gateways_representativos(self) -> None:
+        cenarios = [
+            ("dm*spotify", "spotify", "spotify"),
+            ("mp*loja do bairro", "loja do bairro", "loja do bairro"),
+            ("pagseguro*padaria sao jose", "pagseguro*padaria sao jose", "pagseguro padaria sao jose"),
+        ]
+
+        for descricao, merchant_raw_esperado, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant_assinatura_gateway(descricao) or (
+                    "indefinido",
+                    "indefinido",
+                )
+                self.assertEqual(merchant_raw, merchant_raw_esperado)
+                self.assertEqual(merchant_norm, merchant_norm_esperado)
+
+    def test_parametrizado_casos_curtos_e_ambiguos(self) -> None:
+        cenarios = [
+            ("pix recebido - banco 341", "indefinido", "indefinido"),
+            ("compra no debito x", "x", "x"),
+            ("via", "via", "via"),
+        ]
+
+        for descricao, merchant_raw_esperado, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant(normalizar_texto(descricao))
+                self.assertEqual(merchant_raw, merchant_raw_esperado)
+                self.assertEqual(merchant_norm, merchant_norm_esperado)
+
+    def test_nao_regressao_fluxo_legado_de_extracao_generica(self) -> None:
+        merchant_raw, merchant_norm = extrair_merchant("pagamento recorrente academia smart fit unidade centro")
+
+        self.assertEqual(merchant_raw, "pagamento recorrente academia smart")
+        self.assertEqual(merchant_norm, "pagamento recorrente academia smart")
+
+    def test_parametrizado_limites_string_vazia_numeros_e_simbolos(self) -> None:
+        cenarios = [
+            ("", "indefinido", "indefinido"),
+            ("1234567890", "1234567890", "1234567890"),
+            ("***///---", "indefinido", "indefinido"),
+        ]
+
+        for descricao_bruta, merchant_raw_esperado, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao_bruta=descricao_bruta):
+                descricao = normalizar_descricao_e_extrair_merchant(descricao_bruta)
+                self.assertEqual(descricao.merchant_raw, merchant_raw_esperado)
+                self.assertEqual(descricao.merchant_norm, merchant_norm_esperado)
+
 
 class ParserNubankContaTests(TestCase):
     def setUp(self) -> None:
