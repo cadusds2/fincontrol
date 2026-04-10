@@ -1,8 +1,11 @@
 """Testes do app imports."""
 
 from datetime import date
+from io import StringIO
+from pathlib import Path
 
 from django.core.files.base import ContentFile
+from django.core.management import call_command
 from django.test import TestCase
 
 from accounts.models import Account
@@ -315,6 +318,53 @@ class NormalizacaoImportacaoTests(TestCase):
         self.assertEqual(merchant_raw, "padaria vila mariana 457")
         self.assertEqual(merchant_norm, "padaria vila mariana 457")
 
+    def test_extrai_merchant_de_compra_no_debito_nubank_com_data_e_hora(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Compra no debito - Loja Exemplo 05jan 21h22min"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "loja exemplo")
+        self.assertEqual(descricao.merchant_norm, "loja exemplo")
+
+    def test_extrai_merchant_de_compra_no_debito_via_nupay(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Compra no debito via NuPay - Servico Exemplo 12fev 08h05min"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "servico exemplo")
+        self.assertEqual(descricao.merchant_norm, "servico exemplo")
+
+    def test_extrai_merchant_de_ajuste_de_compra_no_debito(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant(
+            "Ajuste de compra no debito - Mercado Exemplo 03mar 09h10min"
+        )
+
+        self.assertEqual(descricao.merchant_raw, "mercado exemplo")
+        self.assertEqual(descricao.merchant_norm, "mercado exemplo")
+
+    def test_descricoes_tecnicas_nubank_ficam_estaveis(self) -> None:
+        casos = {
+            "Pagamento de fatura": "pagamento de fatura",
+            "Aplicacao RDB": "aplicacao rdb",
+            "Credito em conta": "credito em conta",
+            "Valor adicionado na conta por cartao de credito": (
+                "valor adicionado na conta por cartao de credito"
+            ),
+            "Valor adicionado na conta por cartao de credito - Cartao Exemplo": (
+                "valor adicionado na conta por cartao de credito"
+            ),
+            "Pagamento de boleto efetuado": "pagamento de boleto efetuado",
+            "Pagamento de boleto efetuado - Boleto Exemplo": "pagamento de boleto efetuado",
+            "Ajuste de compra no debito": "ajuste de compra no debito",
+        }
+
+        for descricao_bruta, merchant_esperado in casos.items():
+            with self.subTest(descricao_bruta=descricao_bruta):
+                descricao = normalizar_descricao_e_extrair_merchant(descricao_bruta)
+
+                self.assertEqual(descricao.merchant_raw, merchant_esperado)
+                self.assertEqual(descricao.merchant_norm, merchant_esperado)
+
     def test_fluxo_unificado_de_normalizacao(self) -> None:
         descricao = normalizar_descricao_e_extrair_merchant("Pix   Restaurante Sabor & Arte")
 
@@ -442,3 +492,24 @@ class ParserNubankContaTests(TestCase):
                     "Descrição": "Pagamento de fatura",
                 }
             )
+
+
+class AnalisarMerchantNormCsvCommandTests(TestCase):
+    def test_comando_analisa_csv_sem_persistir_transacoes(self) -> None:
+        caminho_csv = Path(__file__).resolve().parent / "tests_data" / "nubank_merchant_norm_sintetico.csv"
+        saida = StringIO()
+
+        call_command(
+            "analisar_merchant_norm_csv",
+            "--file-type",
+            ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            str(caminho_csv),
+            stdout=saida,
+        )
+
+        texto_saida = saida.getvalue()
+        self.assertIn("Linhas analisadas: 3", texto_saida)
+        self.assertIn("candidato_merchant_map\tloja exemplo", texto_saida)
+        self.assertIn("revisar_sem_merchant_map\t<contraparte_transferencia_pix>", texto_saida)
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(ImportBatch.objects.count(), 0)
