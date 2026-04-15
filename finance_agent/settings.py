@@ -1,6 +1,7 @@
 """Configurações base do projeto Finance Agent (MVP)."""
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -55,23 +56,46 @@ ASGI_APPLICATION = "finance_agent.asgi.application"
 tipo_banco = os.getenv("TIPO_BANCO", "sqlite").strip().lower()
 
 if tipo_banco == "postgres":
+    postgres_banco = os.getenv("POSTGRES_BANCO")
+    postgres_usuario = os.getenv("POSTGRES_USUARIO")
+    postgres_senha = os.getenv("POSTGRES_SENHA")
+    missing_postgres_vars = [
+        var_name
+        for var_name, var_value in (
+            ("POSTGRES_BANCO", postgres_banco),
+            ("POSTGRES_USUARIO", postgres_usuario),
+            ("POSTGRES_SENHA", postgres_senha),
+        )
+        if not var_value
+    ]
+    if missing_postgres_vars:
+        raise ImproperlyConfigured(
+            "TIPO_BANCO=postgres requer variáveis obrigatórias: "
+            + ", ".join(missing_postgres_vars)
+        )
+
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_BANCO"),
-            "USER": os.getenv("POSTGRES_USUARIO"),
-            "PASSWORD": os.getenv("POSTGRES_SENHA"),
+            "NAME": postgres_banco,
+            "USER": postgres_usuario,
+            "PASSWORD": postgres_senha,
             "HOST": os.getenv("POSTGRES_HOST", "localhost"),
             "PORT": os.getenv("POSTGRES_PORTA", "5432"),
         }
     }
-else:
+elif tipo_banco == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+else:
+    raise ImproperlyConfigured(
+        "TIPO_BANCO inválido. Use 'sqlite' ou 'postgres'. "
+        f"Valor recebido: '{tipo_banco}'."
+    )
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
