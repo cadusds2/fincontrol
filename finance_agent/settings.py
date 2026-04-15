@@ -1,6 +1,7 @@
 """Configurações base do projeto Finance Agent (MVP)."""
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, urlparse
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,38 +54,9 @@ TEMPLATES = [
 WSGI_APPLICATION = "finance_agent.wsgi.application"
 ASGI_APPLICATION = "finance_agent.asgi.application"
 
-tipo_banco = os.getenv("TIPO_BANCO", "sqlite").strip().lower()
+uri_banco_dados = (os.getenv("DATABASE_URI") or "").strip()
 
-if tipo_banco == "postgres":
-    postgres_banco = os.getenv("POSTGRES_BANCO")
-    postgres_usuario = os.getenv("POSTGRES_USUARIO")
-    postgres_senha = os.getenv("POSTGRES_SENHA")
-    missing_postgres_vars = [
-        var_name
-        for var_name, var_value in (
-            ("POSTGRES_BANCO", postgres_banco),
-            ("POSTGRES_USUARIO", postgres_usuario),
-            ("POSTGRES_SENHA", postgres_senha),
-        )
-        if not var_value
-    ]
-    if missing_postgres_vars:
-        raise ImproperlyConfigured(
-            "TIPO_BANCO=postgres requer variáveis obrigatórias: "
-            + ", ".join(missing_postgres_vars)
-        )
-
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": postgres_banco,
-            "USER": postgres_usuario,
-            "PASSWORD": postgres_senha,
-            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-            "PORT": os.getenv("POSTGRES_PORTA", "5432"),
-        }
-    }
-elif tipo_banco == "sqlite":
+if not uri_banco_dados:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -92,10 +64,34 @@ elif tipo_banco == "sqlite":
         }
     }
 else:
-    raise ImproperlyConfigured(
-        "TIPO_BANCO inválido. Use 'sqlite' ou 'postgres'. "
-        f"Valor recebido: '{tipo_banco}'."
-    )
+    uri_parseada = urlparse(uri_banco_dados)
+
+    if uri_parseada.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured(
+            "DATABASE_URI inválida. Use URI PostgreSQL com esquema 'postgres://' "
+            "ou 'postgresql://'."
+        )
+
+    nome_banco = uri_parseada.path.lstrip("/")
+    if not nome_banco:
+        raise ImproperlyConfigured(
+            "DATABASE_URI inválida: o nome do banco deve estar presente no caminho."
+        )
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": nome_banco,
+            "USER": uri_parseada.username or "",
+            "PASSWORD": uri_parseada.password or "",
+            "HOST": uri_parseada.hostname or "",
+            "PORT": str(uri_parseada.port or ""),
+        }
+    }
+
+    parametros_consulta = dict(parse_qsl(uri_parseada.query, keep_blank_values=True))
+    if parametros_consulta:
+        DATABASES["default"]["OPTIONS"] = parametros_consulta
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
