@@ -1,4 +1,5 @@
 """Configurações base do projeto Finance Agent (MVP)."""
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -51,12 +52,26 @@ TEMPLATES = [
 WSGI_APPLICATION = "finance_agent.wsgi.application"
 ASGI_APPLICATION = "finance_agent.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+tipo_banco = os.getenv("TIPO_BANCO", "sqlite").strip().lower()
+
+if tipo_banco == "postgres":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_BANCO"),
+            "USER": os.getenv("POSTGRES_USUARIO"),
+            "PASSWORD": os.getenv("POSTGRES_SENHA"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORTA", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
