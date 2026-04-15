@@ -38,7 +38,7 @@ def classificar_transacao(transacao: Transaction) -> ResultadoClassificacao:
     with transaction.atomic():
         transacao = (
             Transaction.objects.select_for_update()
-            .select_related("category", "account")
+            .select_related("account")
             .get(pk=transacao.pk)
         )
 
