@@ -181,6 +181,25 @@ class ClassificacaoMvpTests(TestCase):
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MERCHANT_MAP)
         self.assertEqual(review.status, ReviewQueue.Status.RESOLVED)
 
+    def test_regressao_classificacao_com_categoria_nula_sem_excecao_de_for_update(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="cafeteria azul",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.920"),
+        )
+        transacao = self.criar_transacao("compra no debito", "cafeteria azul")
+        self.assertIsNone(transacao.category_id)
+
+        # Regressão: Transaction.category é nullable, então não deve entrar em
+        # select_related quando a consulta usa select_for_update.
+        resultado = classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(resultado.origem, Transaction.ClassificationSource.MERCHANT_MAP)
+        self.assertEqual(transacao.category, self.categoria_alimentacao)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MERCHANT_MAP)
+
 
 class RevisaoManualServiceTests(TestCase):
     def setUp(self) -> None:
@@ -307,5 +326,23 @@ class RevisaoManualServiceTests(TestCase):
         revisao.refresh_from_db()
 
         self.assertTrue(resultado.ja_resolvida)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MANUAL)
+        self.assertEqual(revisao.status, ReviewQueue.Status.RESOLVED)
+
+    def test_regressao_revisao_manual_com_categoria_nula_sem_excecao_de_for_update(self) -> None:
+        transacao, revisao = self.criar_transacao_com_revisao(merchant_norm="banca central")
+        self.assertIsNone(transacao.category_id)
+
+        # Regressão: Transaction.category é nullable, então não deve entrar em
+        # select_related quando a consulta usa select_for_update.
+        resultado = revisar_transacao_manualmente(
+            review_queue_id=revisao.id,
+            categoria_final_id=self.categoria_outros.id,
+        )
+        transacao.refresh_from_db()
+        revisao.refresh_from_db()
+
+        self.assertFalse(resultado.ja_resolvida)
+        self.assertEqual(transacao.category_id, self.categoria_outros.id)
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MANUAL)
         self.assertEqual(revisao.status, ReviewQueue.Status.RESOLVED)
