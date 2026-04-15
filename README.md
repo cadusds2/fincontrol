@@ -90,6 +90,36 @@ Dependências base do setup atual:
 - `Django>=5.1,<6.0`
 - `psycopg[binary]>=3.1,<4.0`
 
+## Banco PostgreSQL
+
+Pré-requisito: servidor PostgreSQL em execução.
+
+1. Copie o arquivo de exemplo e ajuste os valores:
+
+```bash
+cp .env.exemplo .env
+```
+
+Exemplo de variáveis (ver `.env.exemplo`):
+
+```env
+TIPO_BANCO=postgres
+POSTGRES_BANCO=fincontrol
+POSTGRES_USUARIO=fincontrol
+POSTGRES_SENHA=fincontrol
+POSTGRES_HOST=localhost
+POSTGRES_PORTA=5432
+```
+
+2. Execute os comandos:
+
+```bash
+python manage.py migrate
+python manage.py seed_inicial_mvp
+```
+
+> Observação: o banco padrão continua SQLite quando `TIPO_BANCO` não for `postgres`.
+
 ## Seed inicial do MVP
 
 Para preparar o ambiente para validação manual do domínio:
