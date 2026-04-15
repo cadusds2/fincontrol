@@ -76,6 +76,20 @@ Consulte o registro formal em [`docs/decisions.md`](docs/decisions.md).
 - Roadmap: [`docs/roadmap.md`](docs/roadmap.md)
 - Glossário: [`docs/glossary.md`](docs/glossary.md)
 
+
+## Setup do ambiente
+
+1. Crie e ative um ambiente virtual Python.
+2. Instale as dependências do projeto:
+
+```bash
+pip install -r requirements.txt
+```
+
+Dependências base do setup atual:
+- `Django>=5.1,<6.0`
+- `psycopg[binary]>=3.1,<4.0`
+
 ## Seed inicial do MVP
 
 Para preparar o ambiente para validação manual do domínio:
