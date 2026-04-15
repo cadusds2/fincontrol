@@ -47,7 +47,6 @@ def revisar_transacao_manualmente(
         )
         transacao = (
             Transaction.objects.select_for_update()
-            .select_related("category")
             .get(pk=revisao.transaction_id)
         )
 
