@@ -120,6 +120,31 @@ python manage.py seed_inicial_mvp
 
 > Observação: o banco padrão continua SQLite quando `TIPO_BANCO` não for `postgres`.
 
+### Solução de problemas de conexão (PostgreSQL)
+
+Durante a validação no ambiente de execução automatizado, o comando `python manage.py migrate` com `TIPO_BANCO=postgres` falhou com `Connection refused` em `localhost:5432`. Isso indica que o servidor PostgreSQL não estava ativo/escutando nessa combinação de host e porta.
+
+Para corrigir:
+
+1. Confirme variáveis de conexão no `.env`:
+
+```env
+TIPO_BANCO=postgres
+POSTGRES_BANCO=fincontrol
+POSTGRES_USUARIO=fincontrol
+POSTGRES_SENHA=fincontrol
+POSTGRES_HOST=localhost
+POSTGRES_PORTA=5432
+```
+
+2. Garanta que o PostgreSQL está em execução e aceitando conexões TCP no host/porta configurados.
+3. Se o banco estiver em outro container/servidor, ajuste `POSTGRES_HOST` e `POSTGRES_PORTA` para o endpoint correto e execute novamente:
+
+```bash
+python manage.py check
+python manage.py migrate
+```
+
 ## Seed inicial do MVP
 
 Para preparar o ambiente para validação manual do domínio:
