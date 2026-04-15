@@ -100,15 +100,10 @@ Pré-requisito: servidor PostgreSQL em execução.
 cp .env.exemplo .env
 ```
 
-Exemplo de variáveis (ver `.env.exemplo`):
+Exemplo de variável:
 
 ```env
-TIPO_BANCO=postgres
-POSTGRES_BANCO=fincontrol
-POSTGRES_USUARIO=fincontrol
-POSTGRES_SENHA=fincontrol
-POSTGRES_HOST=localhost
-POSTGRES_PORTA=5432
+DATABASE_URI=postgresql://usuario:senha@localhost:5432/fincontrol
 ```
 
 2. Execute os comandos:
@@ -118,7 +113,7 @@ python manage.py migrate
 python manage.py seed_inicial_mvp
 ```
 
-> Observação: o banco padrão continua SQLite quando `TIPO_BANCO` não for `postgres`.
+> Observação: o banco padrão continua SQLite quando `DATABASE_URI` não estiver preenchida.
 
 ## Seed inicial do MVP
 
