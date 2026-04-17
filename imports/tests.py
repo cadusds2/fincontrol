@@ -15,6 +15,7 @@ from imports.services.normalization import (
     extrair_merchant_contextual,
     extrair_merchant,
     extrair_merchant_transferencia_pix,
+    limpar_padroes_temporais_finais,
     normalizar_descricao_e_extrair_merchant,
     normalizar_texto,
     remover_prefixos_canal,
@@ -349,6 +350,34 @@ class NormalizacaoImportacaoTests(TestCase):
 
         self.assertEqual(trecho_limpo, "app store")
 
+    def test_remove_padroes_temporais_apenas_no_final_do_trecho(self) -> None:
+        cenarios = [
+            ("mercado central 05jan", "mercado central"),
+            ("mercado central 21h22min", "mercado central"),
+            ("mercado central 21h22", "mercado central"),
+            ("mercado central 21:22", "mercado central"),
+            ("mercado central 21 22", "mercado central"),
+            ("mercado 05jan central", "mercado 05jan central"),
+        ]
+
+        for trecho, trecho_esperado in cenarios:
+            with self.subTest(trecho=trecho):
+                self.assertEqual(limpar_padroes_temporais_finais(trecho), trecho_esperado)
+
+    def test_limpeza_temporal_remove_pontuacao_residual_apos_prefixo_de_canal(self) -> None:
+        merchant_raw, merchant_norm = extrair_merchant_compra_debito_credito(
+            "compra no debito via mercado central - 05jan"
+        )
+
+        self.assertEqual(merchant_raw, "mercado central")
+        self.assertEqual(merchant_norm, "mercado central")
+
+    def test_limpeza_temporal_no_final_nao_remove_padrao_no_meio_da_descricao(self) -> None:
+        descricao = normalizar_descricao_e_extrair_merchant("Pagamento mercado 05jan central")
+
+        self.assertEqual(descricao.merchant_raw, "pagamento mercado 05jan central")
+        self.assertEqual(descricao.merchant_norm, "pagamento mercado 05jan central")
+
     def test_saneador_remove_blocos_bancarios_documento_e_numeros(self) -> None:
         trecho_saneado = sanear_trecho_merchant(
             "Mercado Central (cod 123) cpf ***.***.***-** banco 341 agencia 0001 conta 12345-6"
@@ -458,6 +487,24 @@ class NormalizacaoImportacaoTests(TestCase):
                 )
                 self.assertEqual(merchant_raw, merchant_raw_esperado)
                 self.assertEqual(merchant_norm, merchant_norm_esperado)
+
+    def test_nao_regressao_produtos_globo_independente_do_canal(self) -> None:
+        entradas = [
+            "compra no debito - produtos globo",
+            "compra no debito via nupay - produtos globo",
+        ]
+
+        merchants_norm = []
+        for descricao in entradas:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant_compra_debito_credito(descricao) or (
+                    "indefinido",
+                    "indefinido",
+                )
+                self.assertIn("produtos globo", merchant_raw)
+                merchants_norm.append(merchant_norm)
+
+        self.assertEqual(merchants_norm, ["produtos globo", "produtos globo"])
 
     def test_parametrizado_pix_com_nome_cpf_e_dados_bancarios(self) -> None:
         cenarios = [

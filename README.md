@@ -106,6 +106,8 @@ Exemplo de variável:
 DATABASE_URI=postgresql://usuario:senha@localhost:5432/fincontrol
 ```
 
+O projeto carrega automaticamente o arquivo `.env` na inicialização do Django.
+
 2. Execute os comandos:
 
 ```bash
