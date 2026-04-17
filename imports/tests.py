@@ -459,6 +459,24 @@ class NormalizacaoImportacaoTests(TestCase):
                 self.assertEqual(merchant_raw, merchant_raw_esperado)
                 self.assertEqual(merchant_norm, merchant_norm_esperado)
 
+    def test_nao_regressao_produtos_globo_independente_do_canal(self) -> None:
+        entradas = [
+            "compra no debito - produtos globo",
+            "compra no debito via nupay - produtos globo",
+        ]
+
+        merchants_norm = []
+        for descricao in entradas:
+            with self.subTest(descricao=descricao):
+                merchant_raw, merchant_norm = extrair_merchant_compra_debito_credito(descricao) or (
+                    "indefinido",
+                    "indefinido",
+                )
+                self.assertIn("produtos globo", merchant_raw)
+                merchants_norm.append(merchant_norm)
+
+        self.assertEqual(merchants_norm, ["produtos globo", "produtos globo"])
+
     def test_parametrizado_pix_com_nome_cpf_e_dados_bancarios(self) -> None:
         cenarios = [
             (
