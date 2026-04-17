@@ -32,6 +32,8 @@
 - Lista inicial de prefixos descartáveis: `via`, `app`, `site`, `online`, `checkout`.
 - Justificativa: esses prefixos aparecem como artefatos de canal de compra e pioram o match em `MerchantMap`, regras e similaridade quando mantidos no início.
 - Segurança contra falso positivo: manter lista explícita de exceções para nomes legítimos (ex.: `app store`, `via varejo`) e preservar o trecho original quando a remoção não for segura.
+- Após remover prefixos de canal, limpar padrões temporais residuais somente quando estiverem no final do trecho, como `05jan`, `21h22min`, `21h22` e `21:22`.
+- Depois da limpeza temporal, normalizar espaços e pontuação residual para preservar uma chave estável de merchant.
 
 ### 2) Regra técnica de aliases do titular (transferência interna)
 - Comparar `merchant_norm` com aliases conhecidos do titular em configuração explícita por ambiente/conta.

@@ -6,6 +6,27 @@ from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def carregar_dotenv(caminho_arquivo: Path) -> None:
+    """Carrega variáveis simples de um arquivo .env sem dependências externas."""
+    if not caminho_arquivo.exists():
+        return
+
+    for linha in caminho_arquivo.read_text(encoding="utf-8").splitlines():
+        conteudo = linha.strip()
+        if not conteudo or conteudo.startswith("#") or "=" not in conteudo:
+            continue
+
+        chave, valor = conteudo.split("=", 1)
+        chave = chave.strip()
+        valor = valor.strip().strip("'\"")
+
+        if chave:
+            os.environ.setdefault(chave, valor)
+
+
+carregar_dotenv(BASE_DIR / ".env")
+
 SECRET_KEY = "django-inseguro-desenvolvimento"
 DEBUG = True
 ALLOWED_HOSTS: list[str] = []
