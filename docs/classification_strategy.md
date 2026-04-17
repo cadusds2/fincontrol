@@ -71,3 +71,10 @@ Ao revisar uma pendência:
 - Toda classificação deve ser explicável por fonte (`merchant_map`, `rule`, `similarity`, `manual`, `unclassified`).
 - Logs não devem expor dados sensíveis completos.
 - Mudanças de comportamento devem ser rastreáveis por versão de regras YAML.
+## Proteções técnicas prioritárias
+
+Algumas descrições técnicas têm prioridade sobre `MerchantMap` para impedir dupla contagem ou aprendizado indevido:
+- `Pagamento de fatura` permanece em `Pagamento de Fatura`.
+- `Aplicação RDB` permanece em `Movimentação de Investimentos`.
+- Pares de Pix no Crédito detectados por mesmo `external_id`, mesma data e valores opostos permanecem em categoria técnica não reportável.
+- Revisões manuais de transferências/Pix não criam `MerchantMap` de consumo automaticamente.

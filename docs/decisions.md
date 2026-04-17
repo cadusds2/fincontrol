@@ -77,3 +77,6 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 ## D-019 — Aliases explícitos do titular para transferência interna
 - **Decisão:** adicionar configuração explícita `CLASSIFICACAO_ALIASES_TITULAR` por ambiente (com suporte por conta via `external_ref` ou `account_id`) para detectar `Transferência Interna` por match forte com `merchant_norm`.
 - **Motivo:** separar com mais precisão transferências entre contas próprias versus transferências para terceiros, mantendo rastreabilidade em `classification_source=rule` e sem quebrar taxonomia técnica do MVP.
+## D-020 — Pares de Pix no Crédito são movimento técnico no MVP
+- **Decisão:** quando o extrato Nubank conta trouxer par com mesmo `external_id`, mesma data, valores opostos e descrições `Valor adicionado ... Pix no Crédito` + `Transferência enviada pelo Pix ...`, classificar ambos como categoria técnica `Transferência Interna`.
+- **Motivo:** evitar que operações internas de crédito-para-Pix contaminem consumo e `MerchantMap`, sem criar nova categoria técnica fora da taxonomia do MVP.

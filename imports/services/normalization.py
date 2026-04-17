@@ -28,8 +28,8 @@ PADRAO_BLOCO_BANCARIO = re.compile(
 PADRAO_SEQUENCIA_NUMERICA_IRRELEVANTE = re.compile(r"\b\d+(?:[./-]\d+)*\b")
 PADRAO_TRANSFERENCIA_PIX = re.compile(r"\b(?:transferencia|pix)\b")
 PADRAO_COMPRA_DEBITO_CREDITO = re.compile(r"\b(?:compra|estorno\s+compra)\b.*\b(?:debito|credito)\b")
-PADRAO_ASSINATURA_GATEWAY = re.compile(r"\b(?:dm|mp|pagseguro|mercado\s*pago|picpay|stripe)\b")
-PADRAO_PREFIXO_GATEWAY = re.compile(r"^(?:dm|mp)\s*[*-]?\s*")
+PADRAO_ASSINATURA_GATEWAY = re.compile(r"\b(?:dm|mp|bmb|pagseguro|mercado\s*pago|picpay|stripe)\b")
+PADRAO_PREFIXO_GATEWAY = re.compile(r"^(?:dm|mp|bmb)\s*[*-]?\s*")
 PADRAO_TEMPORAL_FINAL = re.compile(
     r"(?:[\s,;:./-]+(?:\d{1,2}(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)|(?:[01]?\d|2[0-3])(?:(?:h|:)[0-5]\d(?:min)?|\s+[0-5]\d)))+$",
     flags=re.IGNORECASE,
@@ -53,6 +53,18 @@ TERMOS_INVALIDOS_NOME_TRANSFERENCIA = {
 
 MAPA_CANONIZACAO_MERCHANT = {
     "nupay produtos globo": "produtos globo",
+    "uber uber trip help.u": "uber",
+    "uber uber trip help": "uber",
+    "netflix.com": "netflix",
+    "netflix entretenimento": "netflix",
+    "dm spotify": "spotify",
+    "bmb light": "light",
+    "combustiveis lobinho l": "combustiveis lobinho",
+    "combustiveis lobinho ltda": "combustiveis lobinho",
+}
+DESCRICOES_GENERICAS_SEM_MERCHANT = {
+    "credito em conta",
+    "ajuste de compra no debito",
 }
 
 
@@ -174,6 +186,16 @@ def canonizar_merchant_final(merchant_norm: str) -> str:
     return MAPA_CANONIZACAO_MERCHANT.get(merchant_limpo, merchant_limpo)
 
 
+def remover_prefixo_gateway(trecho: str) -> str:
+    """Remove prefixo de adquirente quando aparece no inicio do merchant."""
+
+    trecho_limpo = PADRAO_ESPACOS.sub(" ", (trecho or "")).strip(" -")
+    if not trecho_limpo:
+        return "indefinido"
+    candidato = PADRAO_PREFIXO_GATEWAY.sub("", trecho_limpo).strip(" -")
+    return candidato or trecho_limpo
+
+
 def extrair_merchant_transferencia_pix(descricao_normalizada: str) -> tuple[str, str] | None:
     """Extrai nome de pessoa em descrições de transferência/Pix com separadores."""
 
@@ -208,6 +230,7 @@ def extrair_merchant_compra_debito_credito(descricao_normalizada: str) -> tuple[
 
     merchant_raw = sanear_trecho_merchant(descricao_sem_ruido)
     merchant_raw = finalizar_trecho_merchant(merchant_raw)
+    merchant_raw = remover_prefixo_gateway(merchant_raw)
     merchant_norm = canonizar_merchant_final(merchant_raw)
     if not merchant_norm:
         return None
@@ -235,6 +258,9 @@ def extrair_merchant_assinatura_gateway(descricao_normalizada: str) -> tuple[str
 
 def extrair_merchant_contextual(descricao_normalizada: str) -> tuple[str, str]:
     """Orquestra cadeia de extratores especializados em ordem determinística."""
+
+    if descricao_normalizada in DESCRICOES_GENERICAS_SEM_MERCHANT:
+        return "indefinido", "indefinido"
 
     extratores = (
         extrair_merchant_transferencia_pix,

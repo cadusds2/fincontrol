@@ -48,6 +48,7 @@ def aplicar_regras_deterministicas(transacao: Transaction) -> ResultadoRegra | N
         _contem_termos(texto_base, ("movimentacao", "investimentos"))
         or _contem_termos(texto_base, ("resgate", "investimento"))
         or _contem_termos(texto_base, ("aplicacao", "investimento"))
+        or _contem_termos(texto_base, ("aplicacao", "rdb"))
     ):
         return ResultadoRegra(categoria=categoria_movimentacao_investimentos, confianca=Decimal("0.95"))
 

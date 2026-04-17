@@ -506,6 +506,49 @@ class NormalizacaoImportacaoTests(TestCase):
 
         self.assertEqual(merchants_norm, ["produtos globo", "produtos globo"])
 
+    def test_nao_regressao_merchants_recorrentes_nubank_2025(self) -> None:
+        cenarios = [
+            ("Compra no debito - Uber Uber *Trip Help.U", "uber"),
+            ("Compra no debito - Netflix.Com", "netflix"),
+            ("Compra no debito - Netflix Entretenimento", "netflix"),
+            ("Compra no debito - NETFLIX ENTRETENIMENTO", "netflix"),
+            ("Compra no debito - Dm *Spotify", "spotify"),
+            ("Compra no debito - Dm*Spotify", "spotify"),
+            ("Compra no debito - DM          *Spotify", "spotify"),
+            ("Compra no debito - BMB*LIGHT", "light"),
+            ("Compra no debito - Combustiveis Lobinho L", "combustiveis lobinho"),
+            ("Compra no debito - COMBUSTIVEIS LOBINHO L", "combustiveis lobinho"),
+        ]
+
+        for descricao, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                descricao_normalizada = normalizar_descricao_e_extrair_merchant(descricao)
+                self.assertEqual(descricao_normalizada.merchant_norm, merchant_norm_esperado)
+
+    def test_prefixo_mp_em_compra_nao_contamina_merchant_norm(self) -> None:
+        cenarios = [
+            ("Compra no debito - Mp *Henrique", "henrique"),
+            ("Compra no debito - Mp *Barbearia", "barbearia"),
+            ("Compra no debito - MP *BARDALOURA", "bardaloura"),
+        ]
+
+        for descricao, merchant_norm_esperado in cenarios:
+            with self.subTest(descricao=descricao):
+                descricao_normalizada = normalizar_descricao_e_extrair_merchant(descricao)
+                self.assertEqual(descricao_normalizada.merchant_norm, merchant_norm_esperado)
+
+    def test_descricoes_genericas_sem_comerciante_ficam_indefinidas(self) -> None:
+        cenarios = [
+            "Credito em conta",
+            "Ajuste de compra no debito",
+        ]
+
+        for descricao in cenarios:
+            with self.subTest(descricao=descricao):
+                descricao_normalizada = normalizar_descricao_e_extrair_merchant(descricao)
+                self.assertEqual(descricao_normalizada.merchant_raw, "indefinido")
+                self.assertEqual(descricao_normalizada.merchant_norm, "indefinido")
+
     def test_parametrizado_pix_com_nome_cpf_e_dados_bancarios(self) -> None:
         cenarios = [
             (

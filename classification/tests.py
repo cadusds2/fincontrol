@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+import hashlib
 
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -52,7 +53,15 @@ class ClassificacaoMvpTests(TestCase):
             is_reportable=False,
         )
 
-    def criar_transacao(self, descricao_norm: str, merchant_norm: str) -> Transaction:
+    def criar_transacao(
+        self,
+        descricao_norm: str,
+        merchant_norm: str,
+        *,
+        amount: Decimal = Decimal("10.00"),
+        direction: str = Transaction.Direction.DEBIT,
+        external_id: str | None = None,
+    ) -> Transaction:
         return Transaction.objects.create(
             import_batch=self.lote,
             account=self.conta,
@@ -61,9 +70,12 @@ class ClassificacaoMvpTests(TestCase):
             description_norm=descricao_norm,
             merchant_raw=merchant_norm,
             merchant_norm=merchant_norm,
-            amount=Decimal("10.00"),
-            direction=Transaction.Direction.DEBIT,
-            raw_hash=f"hash-{descricao_norm}-{merchant_norm}",
+            amount=amount,
+            direction=direction,
+            external_id=external_id,
+            raw_hash=hashlib.sha256(
+                f"{descricao_norm}|{merchant_norm}|{amount}|{direction}|{external_id}".encode("utf-8")
+            ).hexdigest(),
         )
 
     def test_classifica_por_merchant_map(self) -> None:
@@ -98,6 +110,67 @@ class ClassificacaoMvpTests(TestCase):
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
         self.assertEqual(transacao.classification_confidence, Decimal("0.95"))
         self.assertFalse(ReviewQueue.objects.filter(transaction=transacao).exists())
+
+    def test_pagamento_de_fatura_prioriza_regra_tecnica_sobre_merchant_map(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="pagamento de fatura",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("pagamento de fatura", "pagamento de fatura")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(transacao.category, self.categoria_pagamento_fatura)
+        self.assertEqual(transacao.category.kind, Category.Kind.TECNICA)
+        self.assertFalse(transacao.category.is_reportable)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
+
+    def test_aplicacao_rdb_classifica_como_movimentacao_de_investimentos(self) -> None:
+        transacao = self.criar_transacao("aplicacao rdb", "aplicacao rdb")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(transacao.category, self.categoria_movimentacao_investimentos)
+        self.assertEqual(transacao.category.kind, Category.Kind.TECNICA)
+        self.assertFalse(transacao.category.is_reportable)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
+
+    def test_par_pix_credito_mesmo_external_id_fica_fora_do_consumo(self) -> None:
+        external_id = "pix-credito-001"
+        credito = self.criar_transacao(
+            "valor adicionado na conta por cartao de credito valor adicionado para pix no credito",
+            "valor adicionado para pix no credito",
+            amount=Decimal("160.00"),
+            direction=Transaction.Direction.CREDIT,
+            external_id=external_id,
+        )
+        debito = self.criar_transacao(
+            "transferencia enviada pelo pix debora ferreira alves",
+            "debora ferreira alves",
+            amount=Decimal("160.00"),
+            direction=Transaction.Direction.DEBIT,
+            external_id=external_id,
+        )
+        ReviewQueue.objects.create(
+            transaction=credito,
+            reason=ReviewQueue.Reason.NO_MATCH,
+            status=ReviewQueue.Status.PENDING,
+        )
+
+        classificar_transacao(debito)
+        credito.refresh_from_db()
+        debito.refresh_from_db()
+
+        self.assertEqual(credito.category, self.categoria_transferencia_interna)
+        self.assertEqual(debito.category, self.categoria_transferencia_interna)
+        self.assertEqual(credito.classification_source, Transaction.ClassificationSource.RULE)
+        self.assertEqual(debito.classification_source, Transaction.ClassificationSource.RULE)
+        self.assertFalse(credito.category.is_reportable)
+        self.assertEqual(ReviewQueue.objects.get(transaction=credito).status, ReviewQueue.Status.RESOLVED)
 
     @override_settings(
         CLASSIFICACAO_ALIASES_TITULAR={
@@ -220,18 +293,25 @@ class RevisaoManualServiceTests(TestCase):
             is_reportable=True,
         )
 
-    def criar_transacao_com_revisao(self, merchant_norm: str = "loja xpto") -> tuple[Transaction, ReviewQueue]:
+    def criar_transacao_com_revisao(
+        self,
+        merchant_norm: str = "loja xpto",
+        *,
+        description_norm: str = "compra sem match",
+    ) -> tuple[Transaction, ReviewQueue]:
         transacao = Transaction.objects.create(
             import_batch=self.lote,
             account=self.conta,
             transaction_date=date(2026, 4, 2),
-            description_raw="compra sem match",
-            description_norm="compra sem match",
+            description_raw=description_norm,
+            description_norm=description_norm,
             merchant_raw=merchant_norm,
             merchant_norm=merchant_norm,
             amount=Decimal("50.00"),
             direction=Transaction.Direction.DEBIT,
-            raw_hash=f"hash-revisao-{merchant_norm}",
+            raw_hash=hashlib.sha256(
+                f"revisao|{merchant_norm}|{description_norm}".encode("utf-8")
+            ).hexdigest(),
             classification_source=Transaction.ClassificationSource.UNCLASSIFIED,
         )
         revisao = ReviewQueue.objects.create(
@@ -300,6 +380,22 @@ class RevisaoManualServiceTests(TestCase):
 
     def test_revisao_manual_nao_cria_merchant_map_sem_merchant_norm_util(self) -> None:
         _, revisao = self.criar_transacao_com_revisao(merchant_norm="   ")
+
+        resultado = revisar_transacao_manualmente(
+            review_queue_id=revisao.id,
+            categoria_final_id=self.categoria_outros.id,
+            criar_merchant_map=True,
+        )
+
+        self.assertFalse(resultado.merchant_map_criado)
+        self.assertFalse(resultado.merchant_map_existente)
+        self.assertEqual(MerchantMap.objects.count(), 0)
+
+    def test_revisao_manual_nao_cria_merchant_map_para_transferencia_pix(self) -> None:
+        _, revisao = self.criar_transacao_com_revisao(
+            merchant_norm="carlos eduardo santos da silva",
+            description_norm="transferencia recebida pelo pix carlos eduardo santos da silva",
+        )
 
         resultado = revisar_transacao_manualmente(
             review_queue_id=revisao.id,
