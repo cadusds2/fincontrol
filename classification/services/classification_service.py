@@ -51,6 +51,30 @@ def classificar_transacao(transacao: Transaction) -> ResultadoClassificacao:
                 criou_revisao=False,
             )
 
+        categoria_par_pix_credito = _classificar_par_pix_credito(transacao)
+        if categoria_par_pix_credito is not None:
+            _resolver_revisao_pendente(transacao, "Classificacao automatica por par Pix no Credito.")
+            return ResultadoClassificacao(
+                origem=Transaction.ClassificationSource.RULE,
+                categoria_id=categoria_par_pix_credito.id,
+                criou_revisao=False,
+            )
+
+        resultado_regra_prioritaria = _classificar_por_regra_tecnica_prioritaria(transacao)
+        if resultado_regra_prioritaria is not None:
+            _aplicar_classificacao(
+                transacao=transacao,
+                categoria_id=resultado_regra_prioritaria.categoria.id,
+                origem=Transaction.ClassificationSource.RULE,
+                confianca=resultado_regra_prioritaria.confianca,
+            )
+            _resolver_revisao_pendente(transacao, "Classificacao automatica por regra tecnica prioritaria.")
+            return ResultadoClassificacao(
+                origem=Transaction.ClassificationSource.RULE,
+                categoria_id=resultado_regra_prioritaria.categoria.id,
+                criou_revisao=False,
+            )
+
         resultado_merchant_map = _classificar_por_merchant_map(transacao)
         if resultado_merchant_map is not None:
             _resolver_revisao_pendente(transacao, "Classificação automática por MerchantMap.")
@@ -142,6 +166,87 @@ def _ha_match_forte_alias_titular(merchant: str, aliases_titular: set[str]) -> b
             return True
 
     return False
+
+
+def _classificar_por_regra_tecnica_prioritaria(transacao: Transaction):
+    texto_base = " ".join(
+        [
+            (transacao.description_norm or "").casefold(),
+            (transacao.merchant_norm or "").casefold(),
+        ]
+    )
+    if not (
+        ("pagamento" in texto_base and "fatura" in texto_base)
+        or ("aplicacao" in texto_base and "rdb" in texto_base)
+    ):
+        return None
+    return aplicar_regras_deterministicas(transacao)
+
+
+def _classificar_par_pix_credito(transacao: Transaction) -> Category | None:
+    if not transacao.external_id or not _eh_lancamento_pix_credito(transacao):
+        return None
+
+    contraparte = (
+        Transaction.objects.select_for_update()
+        .filter(
+            account_id=transacao.account_id,
+            external_id=transacao.external_id,
+            transaction_date=transacao.transaction_date,
+            amount=transacao.amount,
+        )
+        .exclude(pk=transacao.pk)
+        .first()
+    )
+    if contraparte is None or contraparte.direction == transacao.direction:
+        return None
+    if not _forma_par_pix_credito(transacao, contraparte):
+        return None
+
+    categoria_transferencia_interna = Category.objects.filter(
+        slug="transferencia-interna",
+        kind=Category.Kind.TECNICA,
+        is_reportable=False,
+        is_active=True,
+    ).first()
+    if categoria_transferencia_interna is None:
+        return None
+
+    for item in (transacao, contraparte):
+        _aplicar_classificacao(
+            transacao=item,
+            categoria_id=categoria_transferencia_interna.id,
+            origem=Transaction.ClassificationSource.RULE,
+            confianca=Decimal("0.96"),
+        )
+        _resolver_revisao_pendente(item, "Classificacao automatica por par Pix no Credito.")
+
+    return categoria_transferencia_interna
+
+
+def _eh_lancamento_pix_credito(transacao: Transaction) -> bool:
+    texto = (transacao.description_norm or "").casefold()
+    return (
+        "valor adicionado" in texto
+        and "pix no credito" in texto
+    ) or (
+        "transferencia enviada" in texto
+        and "pix" in texto
+    )
+
+
+def _forma_par_pix_credito(transacao: Transaction, contraparte: Transaction) -> bool:
+    descricoes = {
+        "valor_adicionado": False,
+        "pix_enviado": False,
+    }
+    for item in (transacao, contraparte):
+        texto = (item.description_norm or "").casefold()
+        if "valor adicionado" in texto and "pix no credito" in texto:
+            descricoes["valor_adicionado"] = True
+        if "transferencia enviada" in texto and "pix" in texto:
+            descricoes["pix_enviado"] = True
+    return all(descricoes.values())
 
 
 def _normalizar_texto_simples(texto: str) -> str:

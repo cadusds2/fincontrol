@@ -8,7 +8,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from classification.models import MerchantMap, ReviewQueue
+from classification.models import Category, MerchantMap, ReviewQueue
 from transactions.models import Transaction
 
 
@@ -66,7 +66,7 @@ def revisar_transacao_manualmente(
         merchant_map_existente = False
         if criar_merchant_map:
             merchant_map_criado, merchant_map_existente = _criar_merchant_map_se_aplicavel(
-                merchant_norm=transacao.merchant_norm,
+                transacao=transacao,
                 categoria_final_id=categoria_final_id,
             )
 
@@ -93,9 +93,18 @@ def _resolver_review_queue(revisao: ReviewQueue, nota_resolucao: str) -> None:
     revisao.save(update_fields=["status", "resolved_at", "resolution_note"])
 
 
-def _criar_merchant_map_se_aplicavel(merchant_norm: str, categoria_final_id: int) -> tuple[bool, bool]:
-    merchant_limpo = (merchant_norm or "").strip()
+def _criar_merchant_map_se_aplicavel(
+    transacao: Transaction,
+    categoria_final_id: int,
+) -> tuple[bool, bool]:
+    merchant_limpo = (transacao.merchant_norm or "").strip()
     if not merchant_limpo:
+        return False, False
+    if _eh_transferencia_ou_pix(transacao):
+        return False, False
+
+    categoria = Category.objects.filter(pk=categoria_final_id).first()
+    if categoria is None or categoria.kind != Category.Kind.CONSUMO or not categoria.is_reportable:
         return False, False
 
     merchant_map, criado = MerchantMap.objects.get_or_create(
@@ -112,3 +121,14 @@ def _criar_merchant_map_se_aplicavel(merchant_norm: str, categoria_final_id: int
         merchant_map.source = MerchantMap.Source.MANUAL_REVIEW
         merchant_map.save(update_fields=["source", "updated_at"])
     return False, True
+
+
+def _eh_transferencia_ou_pix(transacao: Transaction) -> bool:
+    texto = (transacao.description_norm or "").casefold()
+    return (
+        "transferencia" in texto
+        or "recebida pelo pix" in texto
+        or "enviada pelo pix" in texto
+        or texto.startswith("pix recebido")
+        or texto.startswith("pix enviado")
+    )
