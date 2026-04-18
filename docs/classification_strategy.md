@@ -88,9 +88,17 @@ Fluxo de atualização pelo Admin:
 Rulesets ativos devem ser tratados como somente leitura. Para mudar comportamento, criar uma nova versão em rascunho.
 
 ### 5) Similaridade fuzzy
-- Comparar `merchant_norm` com base conhecida.
-- Aplicar categoria apenas se score >= limiar definido em configuração.
-- Registrar `classification_source=similarity`.
+- Comparar apenas `Transaction.merchant_norm` com `MerchantMap.merchant_norm`.
+- Usar somente `MerchantMap` de categorias ativas, `Category.kind=consumo` e `Category.is_reportable=true`.
+- Usar RapidFuzz como motor de comparação textual.
+- Limiares iniciais configuráveis:
+  - `CLASSIFICACAO_FUZZY_AUTO_THRESHOLD = 90`
+  - `CLASSIFICACAO_FUZZY_REVIEW_THRESHOLD = 80`
+- Score >= 90 classifica automaticamente, com `classification_source=similarity` e `classification_confidence = score / 100`.
+- Score entre 80 e 89 mantém a transação como `unclassified`, cria `ReviewQueue` com `reason=low_confidence` e preenche `suggested_category`.
+- Score menor que 80 segue para `ReviewQueue` sem sugestão.
+- Empate final entre categorias diferentes não classifica automaticamente; cria revisão com `reason=conflict`.
+- Categorias técnicas não são usadas pelo fuzzy nesta versão.
 
 ### 6) ReviewQueue
 - Se nenhuma etapa anterior produzir classificação confiável, criar item pendente.

@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from classification.models import Category, MerchantMap, ReviewQueue
 from classification.services.rules import aplicar_regras_deterministicas
+from classification.services.similarity import buscar_similaridade_fuzzy, score_para_confianca
 from transactions.models import Transaction
 
 
@@ -97,6 +98,44 @@ def classificar_transacao(transacao: Transaction) -> ResultadoClassificacao:
                 origem=Transaction.ClassificationSource.RULE,
                 categoria_id=resultado_regra.categoria.id,
                 criou_revisao=False,
+            )
+
+        resultado_similaridade = buscar_similaridade_fuzzy(transacao)
+        if resultado_similaridade is not None:
+            if resultado_similaridade.action == "auto" and resultado_similaridade.category is not None:
+                _aplicar_classificacao(
+                    transacao=transacao,
+                    categoria_id=resultado_similaridade.category.id,
+                    origem=Transaction.ClassificationSource.SIMILARITY,
+                    confianca=score_para_confianca(resultado_similaridade.score),
+                )
+                if resultado_similaridade.merchant_map is not None:
+                    MerchantMap.objects.filter(pk=resultado_similaridade.merchant_map.pk).update(
+                        usage_count=F("usage_count") + 1,
+                        last_used_at=timezone.now(),
+                    )
+                _resolver_revisao_pendente(transacao, "Classificacao automatica por similaridade fuzzy.")
+                return ResultadoClassificacao(
+                    origem=Transaction.ClassificationSource.SIMILARITY,
+                    categoria_id=resultado_similaridade.category.id,
+                    criou_revisao=False,
+                )
+
+            _marcar_nao_classificada(transacao)
+            reason = (
+                ReviewQueue.Reason.CONFLICT
+                if resultado_similaridade.action == "conflict"
+                else ReviewQueue.Reason.LOW_CONFIDENCE
+            )
+            criado = _garantir_review_queue_pendente(
+                transacao,
+                reason=reason,
+                suggested_category=resultado_similaridade.category,
+            )
+            return ResultadoClassificacao(
+                origem=Transaction.ClassificationSource.UNCLASSIFIED,
+                categoria_id=None,
+                criou_revisao=criado,
             )
 
         _marcar_nao_classificada(transacao)
@@ -316,20 +355,31 @@ def _marcar_nao_classificada(transacao: Transaction) -> None:
     transacao.save(update_fields=["category", "classification_source", "classification_confidence", "updated_at"])
 
 
-def _garantir_review_queue_pendente(transacao: Transaction) -> bool:
+def _garantir_review_queue_pendente(
+    transacao: Transaction,
+    *,
+    reason: str = ReviewQueue.Reason.NO_MATCH,
+    suggested_category: Category | None = None,
+) -> bool:
     review, criado = ReviewQueue.objects.get_or_create(
         transaction=transacao,
         defaults={
-            "reason": ReviewQueue.Reason.NO_MATCH,
+            "reason": reason,
             "status": ReviewQueue.Status.PENDING,
+            "suggested_category": suggested_category,
         },
     )
-    if not criado and review.status != ReviewQueue.Status.PENDING:
+    if not criado and (
+        review.status != ReviewQueue.Status.PENDING
+        or review.reason != reason
+        or review.suggested_category_id != (suggested_category.id if suggested_category else None)
+    ):
         review.status = ReviewQueue.Status.PENDING
-        review.reason = ReviewQueue.Reason.NO_MATCH
+        review.reason = reason
+        review.suggested_category = suggested_category
         review.resolved_at = None
         review.resolution_note = ""
-        review.save(update_fields=["status", "reason", "resolved_at", "resolution_note"])
+        review.save(update_fields=["status", "reason", "suggested_category", "resolved_at", "resolution_note"])
     return criado
 
 

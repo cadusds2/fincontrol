@@ -89,3 +89,8 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 - **Decisao:** regras declarativas do MVP ficam em `ClassificationRuleSet`, com YAML versionado, editavel pelo Django Admin e validacao obrigatoria antes da ativacao.
 - **Motivo:** permitir ajustes auditaveis de classificacao sem alterar codigo, mantendo pipeline deterministico, sem LLM e com primeira regra valida vencendo por prioridade.
 - **Limite:** a primeira versao aceita apenas regras por campos da propria `Transaction`; aliases do titular, pares de Pix no Credito e orquestracao do pipeline permanecem em Python.
+
+## D-023 - Similaridade fuzzy conservadora baseada em MerchantMap
+- **Decisao:** a etapa de similaridade fuzzy compara apenas `Transaction.merchant_norm` contra merchants existentes em `MerchantMap`, usando RapidFuzz, e considera somente categorias de consumo ativas e reportaveis.
+- **Motivo:** aproveitar aprendizado manual sem introduzir LLM, mantendo baixo risco de falso positivo em categorias tecnicas.
+- **Limite:** score >= 90 classifica automaticamente com `classification_source=similarity`; score entre 80 e 89 cria `ReviewQueue` com sugestao; score menor segue sem sugestao.

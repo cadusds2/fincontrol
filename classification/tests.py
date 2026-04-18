@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.test import RequestFactory
 from django.test.utils import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import Account
 from classification.admin import ClassificationRuleSetAdmin
@@ -210,6 +211,149 @@ rules:
         self.assertEqual(transacao.category, self.categoria_alimentacao)
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MERCHANT_MAP)
         self.assertNotEqual(transacao.category, categoria_outros)
+
+    def test_regra_yaml_mantem_precedencia_sobre_similaridade_fuzzy(self) -> None:
+        categoria_outros = Category.objects.create(
+            name="Outros",
+            slug="outros",
+            kind=Category.Kind.CONSUMO,
+            is_reportable=True,
+        )
+        ruleset = ClassificationRuleSet.objects.create(
+            name="Regra spotify",
+            version=2,
+            status=ClassificationRuleSet.Status.DRAFT,
+            yaml_content="""version: 2
+rules:
+  - id: spotify_yaml
+    priority: 100
+    category_slug: outros
+    confidence: "0.88"
+    when:
+      all:
+        - field: merchant_norm
+          contains: spotify
+""",
+        )
+        ativar_ruleset(ruleset)
+        MerchantMap.objects.create(
+            merchant_norm="spotfy",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("compra streaming", "spotify")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(transacao.category, categoria_outros)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.RULE)
+
+    def test_similaridade_fuzzy_alta_classifica_por_merchant_map_conhecido(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="spotify",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.MANUAL_REVIEW,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("spotify premium br", "spotify premium br")
+
+        resultado = classificar_transacao(transacao)
+        transacao.refresh_from_db()
+
+        self.assertEqual(resultado.origem, Transaction.ClassificationSource.SIMILARITY)
+        self.assertEqual(transacao.category, self.categoria_alimentacao)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.SIMILARITY)
+        self.assertEqual(transacao.classification_confidence, Decimal("1.00"))
+        self.assertFalse(ReviewQueue.objects.filter(transaction=transacao).exists())
+
+    @override_settings(CLASSIFICACAO_FUZZY_AUTO_THRESHOLD=101, CLASSIFICACAO_FUZZY_REVIEW_THRESHOLD=80)
+    def test_similaridade_fuzzy_media_cria_review_queue_com_sugestao(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="spotify",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.MANUAL_REVIEW,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("spotify premium br", "spotify premium br")
+
+        resultado = classificar_transacao(transacao)
+        transacao.refresh_from_db()
+        review = ReviewQueue.objects.get(transaction=transacao)
+
+        self.assertEqual(resultado.origem, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertIsNone(transacao.category)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertEqual(review.reason, ReviewQueue.Reason.LOW_CONFIDENCE)
+        self.assertEqual(review.suggested_category, self.categoria_alimentacao)
+
+    def test_similaridade_fuzzy_baixa_cria_review_queue_sem_sugestao(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="spotify",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.MANUAL_REVIEW,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("compra avulsa mercado", "mercado central")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+        review = ReviewQueue.objects.get(transaction=transacao)
+
+        self.assertIsNone(transacao.category)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertEqual(review.reason, ReviewQueue.Reason.NO_MATCH)
+        self.assertIsNone(review.suggested_category)
+
+    def test_similaridade_fuzzy_nao_usa_categoria_tecnica(self) -> None:
+        MerchantMap.objects.create(
+            merchant_norm="spotify",
+            category=self.categoria_transferencia_interna,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.900"),
+        )
+        transacao = self.criar_transacao("spotify premium br", "spotify premium br")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+        review = ReviewQueue.objects.get(transaction=transacao)
+
+        self.assertIsNone(transacao.category)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertIsNone(review.suggested_category)
+
+    def test_similaridade_fuzzy_empate_entre_categorias_vai_para_conflito(self) -> None:
+        categoria_outros = Category.objects.create(
+            name="Outros",
+            slug="outros",
+            kind=Category.Kind.CONSUMO,
+            is_reportable=True,
+        )
+        MerchantMap.objects.create(
+            merchant_norm="starbucks",
+            category=self.categoria_alimentacao,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.900"),
+        )
+        MerchantMap.objects.create(
+            merchant_norm="starbucks",
+            category=categoria_outros,
+            source=MerchantMap.Source.SEED,
+            confidence=Decimal("0.900"),
+        )
+        instante = timezone.now()
+        MerchantMap.objects.filter(merchant_norm="starbucks").update(updated_at=instante)
+        transacao = self.criar_transacao("starbucks premium", "starbucks premium")
+
+        classificar_transacao(transacao)
+        transacao.refresh_from_db()
+        review = ReviewQueue.objects.get(transaction=transacao)
+
+        self.assertIsNone(transacao.category)
+        self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.UNCLASSIFIED)
+        self.assertEqual(review.reason, ReviewQueue.Reason.CONFLICT)
+        self.assertIsNone(review.suggested_category)
 
     def test_par_pix_credito_mesmo_external_id_fica_fora_do_consumo(self) -> None:
         external_id = "pix-credito-001"

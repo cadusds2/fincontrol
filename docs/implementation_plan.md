@@ -89,8 +89,8 @@ Ativar pipeline determinístico sem LLM.
 - [ ] Implementar normalização textual.
 - [ ] Implementar match por `MerchantMap`.
 - [x] Implementar motor de regras YAML.
-- [ ] Implementar fallback por similaridade fuzzy.
-- [ ] Encaminhar baixa confiança para `ReviewQueue`.
+- [x] Implementar fallback por similaridade fuzzy.
+- [x] Encaminhar baixa confiança para `ReviewQueue`.
 
 ### Validação mínima
 - [ ] Toda transação termina classificada ou pendente de revisão.
