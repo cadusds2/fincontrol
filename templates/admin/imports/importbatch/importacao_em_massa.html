@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <div id="content-main">
+    <p>
+      Envie varios CSVs com a mesma conta/cartao e o mesmo tipo de arquivo.
+      Cada arquivo criara um ImportBatch independente.
+    </p>
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      <fieldset class="module aligned">
+        {% for field in form %}
+          <div class="form-row{% if field.errors %} errors{% endif %}">
+            {{ field.errors }}
+            <div>
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.help_text %}
+                <div class="help">{{ field.help_text }}</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </fieldset>
+
+      <div class="submit-row">
+        <input type="submit" value="Importar arquivos" class="default">
+        <a href="{% url 'admin:imports_importbatch_changelist' %}" class="closelink">Cancelar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

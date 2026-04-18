@@ -50,10 +50,55 @@
 - Primeira regra válida vence.
 - Registrar `classification_source=rule`.
 
+As regras YAML do MVP são gerenciadas pelo Django Admin em `ClassificationRuleSet`.
+Cada ruleset possui `status` (`draft`, `active`, `archived`), `version`, conteúdo YAML,
+`checksum` e erros de validação. Apenas um ruleset fica ativo por vez.
+
+Formato mínimo:
+
+```yaml
+version: 1
+rules:
+  - id: pagamento_fatura
+    priority: 100
+    category_slug: pagamento-de-fatura
+    confidence: "0.95"
+    when:
+      all:
+        - field: description_norm
+          contains_all:
+            - pagamento
+            - fatura
+```
+
+Campos permitidos na primeira versão: `description_norm`, `merchant_norm`, `direction`, `currency`.
+Operadores permitidos: `contains`, `contains_all`, `equals`, `in`.
+`all` exige todas as condições; `any` permite alternativas. Regex, regras relacionais e expressões customizadas ficam fora do MVP.
+
+Fluxo de atualização pelo Admin:
+1. Criar ou duplicar um ruleset como `draft`.
+2. Editar `version` e `yaml_content` manualmente ou usar "Adicionar regra via formulario".
+3. O editor YAML aceita `Tab` para inserir indentacao, `Shift+Tab` para remover indentacao e `Ctrl+Enter` para salvar.
+4. O formulario guiado exige um ruleset ja salvo como rascunho; nele, informar `id`, prioridade, categoria, confianca, combinador (`all`/`any`) e ate 3 condicoes.
+5. Para operadores `contains_all` e `in`, informar um valor por linha; o Admin converte para lista YAML.
+6. Executar a ação "Validar YAML".
+7. Corrigir `validation_errors`, se houver.
+8. Executar a ação "Ativar ruleset".
+
+Rulesets ativos devem ser tratados como somente leitura. Para mudar comportamento, criar uma nova versão em rascunho.
+
 ### 5) Similaridade fuzzy
-- Comparar `merchant_norm` com base conhecida.
-- Aplicar categoria apenas se score >= limiar definido em configuração.
-- Registrar `classification_source=similarity`.
+- Comparar apenas `Transaction.merchant_norm` com `MerchantMap.merchant_norm`.
+- Usar somente `MerchantMap` de categorias ativas, `Category.kind=consumo` e `Category.is_reportable=true`.
+- Usar RapidFuzz como motor de comparação textual.
+- Limiares iniciais configuráveis:
+  - `CLASSIFICACAO_FUZZY_AUTO_THRESHOLD = 90`
+  - `CLASSIFICACAO_FUZZY_REVIEW_THRESHOLD = 80`
+- Score >= 90 classifica automaticamente, com `classification_source=similarity` e `classification_confidence = score / 100`.
+- Score entre 80 e 89 mantém a transação como `unclassified`, cria `ReviewQueue` com `reason=low_confidence` e preenche `suggested_category`.
+- Score menor que 80 segue para `ReviewQueue` sem sugestão.
+- Empate final entre categorias diferentes não classifica automaticamente; cria revisão com `reason=conflict`.
+- Categorias técnicas não são usadas pelo fuzzy nesta versão.
 
 ### 6) ReviewQueue
 - Se nenhuma etapa anterior produzir classificação confiável, criar item pendente.

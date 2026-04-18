@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:imports_importbatch_importacao_em_massa' %}" class="addlink">
+      Importacao em massa
+    </a>
+  </li>
+  {{ block.super }}
+{% endblock %}

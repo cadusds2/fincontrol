@@ -89,6 +89,8 @@ pip install -r requirements.txt
 Dependências base do setup atual:
 - `Django>=5.1,<6.0`
 - `psycopg[binary]>=3.1,<4.0`
+- `PyYAML>=6.0,<7.0`
+- `RapidFuzz>=3.9,<4.0`
 
 ## Banco PostgreSQL
 

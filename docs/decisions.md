@@ -80,3 +80,17 @@ Este documento consolida decisões formais já tomadas para o MVP do Finance Age
 ## D-020 — Pares de Pix no Crédito são movimento técnico no MVP
 - **Decisão:** quando o extrato Nubank conta trouxer par com mesmo `external_id`, mesma data, valores opostos e descrições `Valor adicionado ... Pix no Crédito` + `Transferência enviada pelo Pix ...`, classificar ambos como categoria técnica `Transferência Interna`.
 - **Motivo:** evitar que operações internas de crédito-para-Pix contaminem consumo e `MerchantMap`, sem criar nova categoria técnica fora da taxonomia do MVP.
+
+## D-021 - Importacao em massa preserva um ImportBatch por arquivo
+- **Decisao:** a importacao em massa no MVP recebe varios CSVs com `account` e `file_type` informados uma vez, cria um `ImportBatch` independente por arquivo e infere apenas `reference_month` pelo conteudo do CSV.
+- **Motivo:** permitir operacao mensal mais rapida sem autodetectar conta ou tipo de arquivo, preservando rastreabilidade, deduplicacao e auditoria por lote.
+
+## D-022 - Regras YAML editaveis pelo Admin
+- **Decisao:** regras declarativas do MVP ficam em `ClassificationRuleSet`, com YAML versionado, editavel pelo Django Admin e validacao obrigatoria antes da ativacao.
+- **Motivo:** permitir ajustes auditaveis de classificacao sem alterar codigo, mantendo pipeline deterministico, sem LLM e com primeira regra valida vencendo por prioridade.
+- **Limite:** a primeira versao aceita apenas regras por campos da propria `Transaction`; aliases do titular, pares de Pix no Credito e orquestracao do pipeline permanecem em Python.
+
+## D-023 - Similaridade fuzzy conservadora baseada em MerchantMap
+- **Decisao:** a etapa de similaridade fuzzy compara apenas `Transaction.merchant_norm` contra merchants existentes em `MerchantMap`, usando RapidFuzz, e considera somente categorias de consumo ativas e reportaveis.
+- **Motivo:** aproveitar aprendizado manual sem introduzir LLM, mantendo baixo risco de falso positivo em categorias tecnicas.
+- **Limite:** score >= 90 classifica automaticamente com `classification_source=similarity`; score entre 80 e 89 cria `ReviewQueue` com sugestao; score menor segue sem sugestao.

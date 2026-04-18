@@ -2,6 +2,7 @@
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 
 class Category(models.Model):
@@ -107,3 +108,35 @@ class ReviewQueue(models.Model):
 
     def __str__(self) -> str:
         return f"Revisão da transação {self.transaction_id} ({self.status})"
+
+
+class ClassificationRuleSet(models.Model):
+    """Conjunto versionado de regras YAML para classificacao deterministica."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Rascunho"
+        ACTIVE = "active", "Ativo"
+        ARCHIVED = "archived", "Arquivado"
+
+    name = models.CharField(max_length=120)
+    version = models.PositiveIntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    yaml_content = models.TextField("conteudo YAML", blank=True)
+    checksum = models.CharField(max_length=64, blank=True)
+    validation_errors = models.TextField(blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-version", "-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["status"],
+                condition=Q(status="active"),
+                name="uniq_active_classification_ruleset",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} v{self.version} ({self.get_status_display()})"

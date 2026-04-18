@@ -1,0 +1,32 @@
+.yaml-editor-enhanced {
+  background: #f8fafc;
+  border-color: #6ca6d9;
+  box-shadow: 0 0 0 1px rgba(31, 111, 184, 0.18);
+}
+
+.yaml-editor-enhanced:focus {
+  background: #fff;
+  border-color: #2b78c2;
+  box-shadow: 0 0 0 2px rgba(31, 111, 184, 0.18);
+  outline: none;
+}
+
+.yaml-editor-help {
+  color: var(--body-quiet-color);
+  font-size: 0.78rem;
+  margin-top: 6px;
+  max-width: 1180px;
+}
+
+.yaml-editor-help code {
+  background: var(--darkened-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.yaml-editor-counter {
+  color: var(--body-quiet-color);
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
