@@ -164,3 +164,26 @@ Este documento define o contrato de dados do MVP com foco em implementabilidade.
 - `Category` 1:N `MerchantMap`
 - `Transaction` 1:1 `ReviewQueue`
 - `Category` 1:N `Budget`
+
+## 8) ClassificationRuleSet
+
+**Propósito:** versionar regras YAML editáveis pelo Admin para classificação determinística.
+
+**Campos obrigatórios (MVP):**
+- `name`
+- `version`
+- `status` (`draft`, `active`, `archived`)
+- `yaml_content`
+
+**Campos opcionais/auditáveis (MVP):**
+- `checksum`
+- `validation_errors`
+- `activated_at`
+- `created_at`
+- `updated_at`
+
+**Regras obrigatórias (MVP):**
+- apenas um ruleset pode estar `active`;
+- rulesets ativos devem ser válidos antes da ativação;
+- alterações devem ser feitas em rascunho e ativadas após validação;
+- regras YAML classificam com `classification_source=rule`.

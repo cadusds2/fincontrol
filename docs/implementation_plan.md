@@ -88,7 +88,7 @@ Ativar pipeline determinístico sem LLM.
 ### Tarefas acionáveis
 - [ ] Implementar normalização textual.
 - [ ] Implementar match por `MerchantMap`.
-- [ ] Implementar motor de regras YAML.
+- [x] Implementar motor de regras YAML.
 - [ ] Implementar fallback por similaridade fuzzy.
 - [ ] Encaminhar baixa confiança para `ReviewQueue`.
 

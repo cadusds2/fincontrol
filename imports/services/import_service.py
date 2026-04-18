@@ -6,8 +6,10 @@ import csv
 import hashlib
 import io
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 
 from imports.models import ImportBatch
@@ -19,6 +21,14 @@ from transactions.models import Transaction
 
 class ErroEstruturalArquivoCsv(Exception):
     """Erro para falhas estruturais do arquivo CSV."""
+
+
+class ErroInferenciaReferenceMonth(Exception):
+    """Erro ao inferir mes de referencia a partir do conteudo do CSV."""
+
+    def __init__(self, mensagem: str, *, linhas_total: int = 0) -> None:
+        super().__init__(mensagem)
+        self.linhas_total = linhas_total
 
 
 @dataclass
@@ -42,6 +52,158 @@ class ResultadoImportacao:
     @property
     def total_erros(self) -> int:
         return len(self.erros_estruturais) + len(self.erros_por_linha) + len(self.erros_fatais)
+
+
+@dataclass(frozen=True)
+class ResultadoArquivoImportacaoEmMassa:
+    nome_arquivo: str
+    import_batch_id: int
+    status: str
+    linhas_total: int = 0
+    linhas_importadas: int = 0
+    linhas_puladas: int = 0
+    linhas_duplicadas: int = 0
+    erro: str = ""
+
+
+@dataclass
+class ResultadoImportacaoEmMassa:
+    arquivos: list[ResultadoArquivoImportacaoEmMassa]
+
+    @property
+    def total_arquivos(self) -> int:
+        return len(self.arquivos)
+
+    @property
+    def lotes_criados(self) -> int:
+        return sum(1 for arquivo in self.arquivos if arquivo.import_batch_id)
+
+    @property
+    def arquivos_com_falha(self) -> int:
+        return sum(1 for arquivo in self.arquivos if arquivo.status == ImportBatch.Status.FAILED)
+
+    @property
+    def linhas_importadas(self) -> int:
+        return sum(arquivo.linhas_importadas for arquivo in self.arquivos)
+
+    @property
+    def linhas_puladas(self) -> int:
+        return sum(arquivo.linhas_puladas for arquivo in self.arquivos)
+
+    @property
+    def linhas_duplicadas(self) -> int:
+        return sum(arquivo.linhas_duplicadas for arquivo in self.arquivos)
+
+
+@dataclass(frozen=True)
+class ResultadoInferenciaReferenceMonth:
+    reference_month: date
+    linhas_total: int
+    linhas_validas: int
+
+
+def executar_importacao_em_massa(
+    *,
+    account_id: int,
+    file_type: str,
+    arquivos: list[UploadedFile],
+) -> ResultadoImportacaoEmMassa:
+    """Cria e processa um `ImportBatch` independente para cada arquivo enviado."""
+
+    resultados: list[ResultadoArquivoImportacaoEmMassa] = []
+    for arquivo in arquivos:
+        lote = ImportBatch.objects.create(
+            account_id=account_id,
+            file_type=file_type,
+            source_filename=getattr(arquivo, "name", "") or "arquivo.csv",
+            status=ImportBatch.Status.RECEIVED,
+        )
+        lote.file.save(lote.source_filename, arquivo, save=True)
+
+        try:
+            inferencia = inferir_reference_month_lote(lote)
+        except ErroInferenciaReferenceMonth as erro:
+            _marcar_lote_com_falha_pre_importacao(
+                lote=lote,
+                linhas_total=erro.linhas_total,
+                mensagem=str(erro),
+            )
+            resultados.append(
+                ResultadoArquivoImportacaoEmMassa(
+                    nome_arquivo=lote.source_filename,
+                    import_batch_id=lote.id,
+                    status=lote.status,
+                    linhas_total=lote.rows_total,
+                    linhas_puladas=lote.rows_skipped,
+                    erro=lote.error_log,
+                )
+            )
+            continue
+
+        lote.reference_month = inferencia.reference_month
+        lote.save(update_fields=["reference_month", "updated_at"])
+
+        resultado = executar_importacao_import_batch(lote.id)
+        lote.refresh_from_db()
+        resultados.append(
+            ResultadoArquivoImportacaoEmMassa(
+                nome_arquivo=lote.source_filename,
+                import_batch_id=lote.id,
+                status=lote.status,
+                linhas_total=resultado.linhas_total,
+                linhas_importadas=resultado.linhas_importadas,
+                linhas_puladas=resultado.linhas_puladas,
+                linhas_duplicadas=resultado.linhas_duplicadas,
+                erro=lote.error_log,
+            )
+        )
+
+    return ResultadoImportacaoEmMassa(arquivos=resultados)
+
+
+def inferir_reference_month_lote(lote: ImportBatch) -> ResultadoInferenciaReferenceMonth:
+    """Infere o mes de referencia usando o parser declarado no lote."""
+
+    parser = MAPA_PARSERS.get(lote.file_type)
+    if parser is None:
+        raise ErroInferenciaReferenceMonth(f"Tipo de arquivo nÃ£o suportado: {lote.file_type}")
+
+    conteudo_csv = ler_conteudo_csv(lote)
+    leitor = csv.DictReader(io.StringIO(conteudo_csv))
+    try:
+        parser.validar_cabecalho(leitor.fieldnames)
+    except ValueError as erro_cabecalho:
+        raise ErroInferenciaReferenceMonth(str(erro_cabecalho)) from erro_cabecalho
+
+    linhas_total = 0
+    linhas_validas = 0
+    meses: set[date] = set()
+    for linha_csv in leitor:
+        linhas_total += 1
+        try:
+            linha_canonica = parser.interpretar_linha(linha_csv)
+        except Exception:  # noqa: BLE001
+            continue
+        linhas_validas += 1
+        meses.add(linha_canonica.data_transacao.replace(day=1))
+
+    if not meses:
+        raise ErroInferenciaReferenceMonth(
+            "Nao foi possivel inferir o mes de referencia: nenhuma data valida encontrada.",
+            linhas_total=linhas_total,
+        )
+    if len(meses) > 1:
+        meses_formatados = ", ".join(sorted(mes.strftime("%Y-%m") for mes in meses))
+        raise ErroInferenciaReferenceMonth(
+            "Arquivo contem transacoes de multiplos meses: " + meses_formatados,
+            linhas_total=linhas_total,
+        )
+
+    return ResultadoInferenciaReferenceMonth(
+        reference_month=next(iter(meses)),
+        linhas_total=linhas_total,
+        linhas_validas=linhas_validas,
+    )
 
 
 def executar_importacao_import_batch(import_batch_id: int) -> ResultadoImportacao:
@@ -158,6 +320,23 @@ def atualizar_status_lote(lote: ImportBatch, resultado: ResultadoImportacao) -> 
         lote.status = ImportBatch.Status.PROCESSED
 
     lote.error_log = montar_error_log(resultado)
+    lote.save()
+
+
+def _marcar_lote_com_falha_pre_importacao(
+    *,
+    lote: ImportBatch,
+    linhas_total: int,
+    mensagem: str,
+) -> None:
+    lote.rows_total = linhas_total
+    lote.rows_imported = 0
+    lote.rows_skipped = linhas_total
+    lote.total_rows = linhas_total
+    lote.imported_rows = 0
+    lote.duplicated_rows = 0
+    lote.status = ImportBatch.Status.FAILED
+    lote.error_log = f"[estrutural] {mensagem}"
     lote.save()
 
 

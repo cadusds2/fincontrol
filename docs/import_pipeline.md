@@ -17,6 +17,17 @@ Importar CSV com rastreabilidade por lote, validação por parser dedicado e ded
 
 Não há autodetecção no MVP.
 
+## Importacao em massa no Admin
+
+A importacao em massa e uma camada operacional sobre o fluxo existente:
+- usuario informa uma unica vez `account_id` e `file_type`;
+- usuario envia varios CSVs;
+- sistema cria um `ImportBatch` independente para cada arquivo;
+- `reference_month` e inferido pelo conteudo do CSV usando o parser declarado;
+- cada lote executa o mesmo pipeline de importacao, deduplicacao e classificacao.
+
+Falha em um arquivo nao bloqueia os demais. Arquivos sem data valida ou com mais de um mes sao marcados como `failed` antes da criacao de transacoes.
+
 ## Etapas do pipeline
 
 ### 1) Recebimento e criação do lote

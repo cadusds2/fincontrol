@@ -3,12 +3,16 @@
 from datetime import date
 
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
 from accounts.models import Account
 from imports.models import ImportBatch
 from imports.parsers.nubank_account import ParserNubankConta
-from imports.services.import_service import executar_importacao_import_batch
+from imports.services.import_service import (
+    executar_importacao_em_massa,
+    executar_importacao_import_batch,
+)
 from imports.services.normalization import (
     extrair_merchant_assinatura_gateway,
     extrair_merchant_compra_debito_credito,
@@ -47,6 +51,13 @@ class ImportacaoCsvServiceTests(TestCase):
         lote.file.save("extrato.csv", ContentFile(conteudo_csv.encode("utf-8")))
         lote.save()
         return lote
+
+    def criar_upload(self, nome: str, conteudo_csv: str) -> SimpleUploadedFile:
+        return SimpleUploadedFile(
+            nome,
+            conteudo_csv.encode("utf-8"),
+            content_type="text/csv",
+        )
 
     def test_importacao_basica_preenche_campos_canonicos(self) -> None:
         csv_valido = (
@@ -309,6 +320,146 @@ class ImportacaoCsvServiceTests(TestCase):
         self.assertEqual(transacao.category, categoria)
         self.assertEqual(transacao.classification_source, Transaction.ClassificationSource.MERCHANT_MAP)
         self.assertEqual(ReviewQueue.objects.filter(transaction=transacao).count(), 0)
+
+    def test_importacao_em_massa_cria_um_lote_por_csv_com_mes_inferido(self) -> None:
+        arquivos = [
+            self.criar_upload(
+                "janeiro.csv",
+                (
+                    "Data,Valor,Identificador,Descrição\n"
+                    "10/01/2025,-28.00,id_jan,Compra no debito - Casa do Nando\n"
+                ),
+            ),
+            self.criar_upload(
+                "fevereiro.csv",
+                (
+                    "Data,Valor,Identificador,Descrição\n"
+                    "12/02/2025,-85.70,id_fev,Compra no debito - Netflix.Com\n"
+                ),
+            ),
+        ]
+
+        resultado = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=arquivos,
+        )
+        lotes = ImportBatch.objects.order_by("source_filename")
+
+        self.assertEqual(resultado.total_arquivos, 2)
+        self.assertEqual(resultado.lotes_criados, 2)
+        self.assertEqual(resultado.linhas_importadas, 2)
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertEqual(lotes.count(), 2)
+        self.assertSetEqual(
+            set(lotes.values_list("account_id", flat=True)),
+            {self.conta.id},
+        )
+        self.assertSetEqual(
+            set(lotes.values_list("file_type", flat=True)),
+            {ImportBatch.FileType.EXTRATO_CONTA_NUBANK},
+        )
+        self.assertSetEqual(
+            set(lotes.values_list("reference_month", flat=True)),
+            {date(2025, 1, 1), date(2025, 2, 1)},
+        )
+
+    def test_reimportacao_em_massa_respeita_deduplicacao_existente(self) -> None:
+        conteudo = (
+            "Data,Valor,Identificador,Descrição\n"
+            "10/01/2025,-28.00,id_duplicado,Compra no debito - Casa do Nando\n"
+        )
+
+        resultado_1 = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=[self.criar_upload("jan_1.csv", conteudo)],
+        )
+        resultado_2 = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=[self.criar_upload("jan_2.csv", conteudo)],
+        )
+
+        self.assertEqual(resultado_1.linhas_importadas, 1)
+        self.assertEqual(resultado_2.linhas_importadas, 0)
+        self.assertEqual(resultado_2.linhas_duplicadas, 1)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(ImportBatch.objects.count(), 2)
+
+    def test_importacao_em_massa_falha_um_arquivo_sem_bloquear_os_demais(self) -> None:
+        arquivo_valido = self.criar_upload(
+            "valido.csv",
+            (
+                "Data,Valor,Identificador,Descrição\n"
+                "10/01/2025,-28.00,id_ok,Compra no debito - Casa do Nando\n"
+            ),
+        )
+        arquivo_invalido = self.criar_upload(
+            "invalido.csv",
+            "Data,Valor,Identificador,Descrição\n31-31-2025,-10.00,id_bad,Linha invalida\n",
+        )
+
+        resultado = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=[arquivo_valido, arquivo_invalido],
+        )
+
+        self.assertEqual(resultado.total_arquivos, 2)
+        self.assertEqual(resultado.arquivos_com_falha, 1)
+        self.assertEqual(resultado.linhas_importadas, 1)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertEqual(
+            ImportBatch.objects.filter(status=ImportBatch.Status.PROCESSED).count(),
+            1,
+        )
+        lote_falho = ImportBatch.objects.get(status=ImportBatch.Status.FAILED)
+        self.assertIn("nenhuma data valida", lote_falho.error_log)
+
+    def test_importacao_em_massa_rejeita_csv_com_multiplos_meses_sem_importar(self) -> None:
+        arquivo = self.criar_upload(
+            "multiplos_meses.csv",
+            (
+                "Data,Valor,Identificador,Descrição\n"
+                "10/01/2025,-28.00,id_jan,Compra no debito - Casa do Nando\n"
+                "10/02/2025,-28.00,id_fev,Compra no debito - Casa do Nando\n"
+            ),
+        )
+
+        resultado = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=[arquivo],
+        )
+        lote = ImportBatch.objects.get()
+
+        self.assertEqual(resultado.arquivos_com_falha, 1)
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(lote.status, ImportBatch.Status.FAILED)
+        self.assertIsNone(lote.reference_month)
+        self.assertIn("multiplos meses", lote.error_log)
+
+    def test_importacao_em_massa_rejeita_nubank_sem_identificador(self) -> None:
+        arquivo = self.criar_upload(
+            "sem_identificador.csv",
+            (
+                "Data,Valor,Identificador,Descrição\n"
+                "10/01/2025,-28.00,   ,Compra no debito - Casa do Nando\n"
+            ),
+        )
+
+        resultado = executar_importacao_em_massa(
+            account_id=self.conta.id,
+            file_type=ImportBatch.FileType.EXTRATO_CONTA_NUBANK,
+            arquivos=[arquivo],
+        )
+        lote = ImportBatch.objects.get()
+
+        self.assertEqual(resultado.arquivos_com_falha, 1)
+        self.assertEqual(Transaction.objects.count(), 0)
+        self.assertEqual(lote.status, ImportBatch.Status.FAILED)
+        self.assertIn("nenhuma data valida", lote.error_log)
 
 
 class NormalizacaoImportacaoTests(TestCase):

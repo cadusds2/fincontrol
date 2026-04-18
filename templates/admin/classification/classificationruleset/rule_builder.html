@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:classification_classificationruleset_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; <a href="{{ change_url }}">{{ original }}</a>
+  &rsaquo; Adicionar regra via formulario
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>
+    <strong>Ruleset:</strong> {{ original.name }} v{{ original.version }}
+    <br>
+    <strong>Status:</strong> {{ original.get_status_display }}
+  </p>
+
+  <p>
+    Preencha os campos abaixo para adicionar uma regra ao YAML deste rascunho.
+    Para <code>contains_all</code> e <code>in</code>, informe um valor por linha.
+  </p>
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row{% if field.errors %} errors{% endif %}">
+          {{ field.errors }}
+          <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+              <div class="help">{{ field.help_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    <div class="submit-row">
+      <input type="submit" value="Adicionar regra" class="default">
+      <a href="{{ change_url }}" class="button cancel-link">Voltar ao ruleset</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
